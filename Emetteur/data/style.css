@@ -1,0 +1,72 @@
+/* Style général */
+body {
+  background: #1e1e1e;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
+}
+
+.container {
+  max-width: 520px;
+  margin: auto;
+}
+
+/* Boîtes d'information */
+.card {
+  background: #2b2b2b;
+  padding: 18px;
+  margin-top: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px black;
+}
+
+/* Valeur affichée (grosse police) */
+.big-value {
+  font-size: 48px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+/* Input seuil */
+.input {
+  padding: 10px;
+  width: 120px;
+  text-align: center;
+  font-size: 20px;
+}
+
+/* Boutons */
+.btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: #2196F3;
+  color: white;
+  border: none;
+  font-size: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.alert-btn {
+  background: #FF3D00;
+}
+
+/* Indicateurs d'état */
+.status.ok {
+  color: #00E676;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.status.alert {
+  color: #FF3D00;
+  font-size: 28px;
+  font-weight: bold;
+  animation: blink 1s infinite;
+}
+
+/* Effet clignotement */
+@keyframes blink {
+  50% { opacity: 0.2; }
+}

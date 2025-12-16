@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Récepteur LoRa – Salle Technique</title>
+    <!-- On charge le CSS depuis LittleFS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>Récepteur LoRa – Salle Technique</h1>
+
+    <!-- Carte = affichage de la température reçue -->
+    <div class="card">
+        <h2>Température reçue :</h2>
+        <div id="tempValue" class="big-value">-- °C</div>
+    </div>
+
+    <!-- Carte = état global du système (Normal / Alerte) -->
+    <div class="card">
+        <h2>État :</h2>
+        <div id="status" class="status ok">En attente de données...</div>
+    </div>
+
+    <!-- Carte = historique des valeurs (simple liste) -->
+    <div class="card">
+        <h2>Historique :</h2>
+        <ul id="history"></ul>
+    </div>
+</div>
+
+<!-- Logique côté navigateur (simulation pour l’instant) -->
+<script src="script.js"></script>
+</body>
+</html>
