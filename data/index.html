@@ -8,13 +8,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-     <link rel="stylesheet" href="style.css"
+     <link rel="stylesheet" href="style.css">
     
-<script src="script.js"></script>
-
-    
-
-
+    <script src="script.js"></script>
 
     <title>Temperature Management System</title>
 
@@ -23,7 +19,7 @@
     <!-- Header -->
 <div class="header">
     <h1>
-        <img src="temperature.png" alt="Température" class="title-icon">
+        <img src="images/temperature.png" alt="Température" class="title-icon">
         Temperature Management System
     </h1>
 </div>
@@ -36,17 +32,17 @@
 
         <div class="sidebar">
             <h2>
-                <img src="dashboard.png" class="title-icon">
+                <img src="images/dashboard.png" class="title-icon">
                 Dashboard
             </h2>
 
             <button class="nav-btn active" onclick="switchView('emetteur')">
-                <img src="podcast.png" class="nav-icon">
+                <img src="images/podcast.png" class="nav-icon">
                 <span>Émetteur (Salle Technique)</span>
             </button>
 
             <button class="nav-btn" onclick="switchView('recepteur')">
-                <img src="smoke-detector.png" class="nav-icon">
+                <img src="images/smoke-detector.png" class="nav-icon">
                 <span>Récepteur (Salle des Machines)</span>
             </button>
         </div>
@@ -64,7 +60,7 @@
 
                     <div class="sensor-card temperature">
                         <div class="sensor-icon">
-                            <img src="temperature.png" class="sensor-icon-img" alt="Température">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
                         </div>
                         <div class="sensor-label">Température</div>
                         <div id="emetteur-temp" class="sensor-value">-- °C</div>
@@ -72,7 +68,7 @@
 
                     <div class="sensor-card humidity">
                         <div class="sensor-icon">
-                            <img src="humidity.png" class="sensor-icon-img" alt="Humidité">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
                         </div>
                         <div class="sensor-label">Humidité</div>
                         <div id="emetteur-humidity" class="sensor-value">-- %</div>
@@ -80,7 +76,7 @@
 
                     <div class="sensor-card smoke">
                         <div class="sensor-icon">
-                            <img src="smoke.png" class="sensor-icon-img" alt="Fumée">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
                         </div>
                         <div class="sensor-label">Fumée</div>
                         <div id="emetteur-smoke" class="sensor-value">-- ppm</div>
@@ -120,7 +116,7 @@
 
                     <div class="sensor-card temperature">
                         <div class="sensor-icon">
-                            <img src="temperature.png" class="sensor-icon-img" alt="Température">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
                         </div>
                         <div class="sensor-label">Température Reçue</div>
                         <div id="recepteur-temp" class="sensor-value">-- °C</div>
@@ -128,7 +124,7 @@
 
                     <div class="sensor-card humidity">
                         <div class="sensor-icon">
-                            <img src="humidity.png" class="sensor-icon-img" alt="Humidité">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
                         </div>
                         <div class="sensor-label">Humidité Reçue</div>
                         <div id="recepteur-humidity" class="sensor-value">-- %</div>
@@ -136,7 +132,7 @@
 
                     <div class="sensor-card smoke">
                         <div class="sensor-icon">
-                            <img src="smoke.png" class="sensor-icon-img" alt="Fumée">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
                         </div>
                         <div class="sensor-label">Fumée Reçue</div>
                         <div id="recepteur-smoke" class="sensor-value">-- ppm</div>
