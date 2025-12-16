@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+
+
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+     <link rel="stylesheet" href="style.css">
+    
+    <script src="script.js"></script>
+
+    <title>Temperature Management System</title>
+
+</head>
+<body>
+    <!-- Header -->
+<div class="header">
+    <h1>
+        <img src="images/temperature.png" alt="Température" class="title-icon">
+        Temperature Management System
+    </h1>
+</div>
+
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        
+
+        <div class="sidebar">
+            <h2>
+                <img src="images/dashboard.png" class="title-icon">
+                Dashboard
+            </h2>
+
+            <button class="nav-btn active" onclick="switchView('emetteur')">
+                <img src="images/podcast.png" class="nav-icon">
+                <span>Émetteur (Salle Technique)</span>
+            </button>
+
+            <button class="nav-btn" onclick="switchView('recepteur')">
+                <img src="images/smoke-detector.png" class="nav-icon">
+                <span>Récepteur (Salle des Machines)</span>
+            </button>
+        </div>
+
+
+
+
+
+        <!-- Content Area -->
+        <div class="content">
+            <!-- Vue Émetteur -->
+            <div id="emetteur" class="view active">
+                <div class="sensor-grid">
+
+
+                    <div class="sensor-card temperature">
+                        <div class="sensor-icon">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
+                        </div>
+                        <div class="sensor-label">Température</div>
+                        <div id="emetteur-temp" class="sensor-value">-- °C</div>
+                    </div>
+
+                    <div class="sensor-card humidity">
+                        <div class="sensor-icon">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
+                        </div>
+                        <div class="sensor-label">Humidité</div>
+                        <div id="emetteur-humidity" class="sensor-value">-- %</div>
+                    </div>
+
+                    <div class="sensor-card smoke">
+                        <div class="sensor-icon">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
+                        </div>
+                        <div class="sensor-label">Fumée</div>
+                        <div id="emetteur-smoke" class="sensor-value">-- ppm</div>
+                    </div>
+
+
+
+
+
+                </div>
+
+                <div class="cards-grid" style="margin-top: 24px;">
+
+
+                    <div id="emetteur-alert-container">
+                        <!-- Le contenu sera généré dynamiquement -->
+                    </div>
+
+                    <div class="card">
+                        <h3>⚡ Actions Rapides</h3>
+                        <button onclick="testAlerteEmetteur()" class="btn btn-alert" style="width: 100%; margin-top: 20px;">
+                            Tester une Alerte
+                        </button>
+                    </div>
+                </div>
+
+                <div class="history-card">
+                    <h3>📜 Historique des Mesures</h3>
+                    <ul id="emetteur-history" class="history-list"></ul>
+                </div>
+            </div>
+
+            <!-- Vue Récepteur -->
+            <div id="recepteur" class="view">
+                <div class="sensor-grid">
+                  
+
+                    <div class="sensor-card temperature">
+                        <div class="sensor-icon">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
+                        </div>
+                        <div class="sensor-label">Température Reçue</div>
+                        <div id="recepteur-temp" class="sensor-value">-- °C</div>
+                    </div>
+
+                    <div class="sensor-card humidity">
+                        <div class="sensor-icon">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
+                        </div>
+                        <div class="sensor-label">Humidité Reçue</div>
+                        <div id="recepteur-humidity" class="sensor-value">-- %</div>
+                    </div>
+
+                    <div class="sensor-card smoke">
+                        <div class="sensor-icon">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
+                        </div>
+                        <div class="sensor-label">Fumée Reçue</div>
+                        <div id="recepteur-smoke" class="sensor-value">-- ppm</div>
+                    </div>
+
+                </div>
+
+                <div class="cards-grid" style="margin-top: 24px;">
+                        
+                    <div class="card">
+                        <h3>⚙️ Configuration des Seuils</h3>
+                        <div class="threshold-dropdown">
+                            <div class="threshold-trigger">
+                                <span>Configurer les seuils d'alerte</span>
+                                <span class="threshold-arrow">▼</span>
+                            </div>
+                            <div class="threshold-menu">
+                                <div class="threshold-item">
+                                    <label class="threshold-label">🌡️ Température</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilTemp" value="35" class="threshold-input">
+                                        <span class="threshold-unit">°C</span>
+                                        <button onclick="updateThreshold('temp')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                                <div class="threshold-item">
+                                    <label class="threshold-label">💧 Humidité</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilHumidity" value="80" class="threshold-input">
+                                        <span class="threshold-unit">%</span>
+                                        <button onclick="updateThreshold('humidity')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                                <div class="threshold-item">
+                                    <label class="threshold-label">💨 Fumée</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilSmoke" value="100" class="threshold-input">
+                                        <span class="threshold-unit">ppm</span>
+                                        <button onclick="updateThreshold('smoke')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="current-thresholds">
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Température:</span>
+                                <span class="threshold-display-value" id="display-temp">35°C</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Humidité:</span>
+                                <span class="threshold-display-value" id="display-humidity">80%</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Fumée:</span>
+                                <span class="threshold-display-value" id="display-smoke">100 ppm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="recepteur-alert-container">
+                        <!-- Le contenu sera généré dynamiquement -->
+                    </div>
+
+                </div>
+
+                <div class="history-card">
+                    <h3>📜 Historique des Réceptions</h3>
+                    <ul id="recepteur-history" class="history-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+</html>
