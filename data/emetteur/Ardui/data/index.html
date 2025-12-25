@@ -1,34 +1,36 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
 
 
 
-    
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-     <link rel="stylesheet" href="style.css">
-    
+    <link rel="stylesheet" href="style.css">
+
     <script src="script.js"></script>
 
     <title>Temperature Management System</title>
 
 </head>
+
 <body>
     <!-- Header -->
-<div class="header">
-    <h1>
-        <img src="images/temperature.png" alt="Température" class="title-icon">
-        Temperature Management System
-    </h1>
-</div>
+    <div class="header">
+        <h1>
+            <img src="images/temperature.png" alt="Température" class="title-icon">
+            Temperature Management System
+        </h1>
+    </div>
 
 
     <!-- Main Container -->
     <div class="main-container">
         <!-- Sidebar -->
-        
+
 
         <div class="sidebar">
             <h2>
@@ -86,16 +88,33 @@
                         <!-- Le contenu sera généré dynamiquement -->
                     </div>
 
+                    <!-- Dans la vue émetteur, à la place de la carte "Actions Rapides" -->
                     <div class="card">
-                        <h3>⚡ Actions Rapides</h3>
-                        <button onclick="testAlerteEmetteur()" class="btn btn-alert" style="width: 100%; margin-top: 20px;">
-                            Tester une Alerte
+                        <h3>⚙️ Seuils d'Alerte</h3>
+
+                        <div class="current-thresholds" style="margin: 20px 0;">
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Température :</span>
+                                <span class="threshold-display-value" id="display-temp">35°C</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Humidité :</span>
+                                <span class="threshold-display-value" id="display-humidity">80%</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Fumée/Gaz :</span>
+                                <span class="threshold-display-value" id="display-smoke">1500 ppm</span>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="openThresholdPopup()">
+                            Modifier les seuils
                         </button>
                     </div>
                 </div>
 
                 <div class="history-card">
-                    <h3>📜 Historique des Mesures</h3>
+                    <h3>📜 Historique des Alertes </h3>
                     <ul id="emetteur-history" class="history-list"></ul>
                 </div>
             </div>
@@ -103,7 +122,7 @@
             <!-- Vue Récepteur -->
             <div id="recepteur" class="view">
                 <div class="sensor-grid">
-                  
+
 
                     <div class="sensor-card temperature">
                         <div class="sensor-icon">
@@ -132,7 +151,7 @@
                 </div>
 
                 <div class="cards-grid" style="margin-top: 24px;">
-                        
+
                     <div class="card">
                         <h3>⚙️ Configuration des Seuils</h3>
                         <div class="threshold-dropdown">
@@ -197,6 +216,46 @@
         </div>
     </div>
 
+    <!-- Popup de modification des seuils -->
+    <div id="thresholdPopup" class="popup" style="display:none;">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h2>Configurer les Seuils d'Alerte</h2>
+                <button class="close-btn" onclick="closeThresholdPopup()">×</button>
+            </div>
 
+            <div class="popup-body">
+                <div class="form-group">
+                    <label>🌡️ Température maximale</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilTemp" step="0.5" min="0" max="100">
+                        <span class="unit">°C</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>💧 Humidité maximale</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilHumidity" min="0" max="100">
+                        <span class="unit">%</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>💨 Fumée / Gaz (ppm)</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilSmoke" min="0" max="5000">
+                        <span class="unit">ppm</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeThresholdPopup()">Annuler</button>
+                <button class="btn btn-primary" onclick="saveThresholds()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
 </body>
+
 </html>
