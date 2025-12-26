@@ -1,0 +1,6 @@
+{
+    "seuilTemp": 33,
+    "seuilHumidity": 80,
+    "seuilSmoke": 1400,
+    "seuilFlame": 2001
+}

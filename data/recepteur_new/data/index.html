@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="style.css">
+
+    <script src="script.js"></script>
+
+    <title>Temperature Management System</title>
+
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>
+            <img src="images/temperature.png" alt="Température" class="title-icon">
+            Temperature Management System
+        </h1>
+    </div>
+
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+
+
+        <div class="sidebar">
+            <h2>
+                <img src="images/dashboard.png" class="title-icon">
+                Dashboard
+            </h2>
+
+            <button class="nav-btn active" onclick="switchView('emetteur')">
+                <img src="images/podcast.png" class="nav-icon">
+                <span>Émetteur (Salle Technique)</span>
+            </button>
+
+        </div>
+        <!-- Content Area -->
+        <div class="content">
+            <div id="emetteur" class="view active">
+                <div class="sensor-grid">
+                    <div class="sensor-card temperature">
+                        <div class="sensor-icon">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
+                        </div>
+                        <div class="sensor-label">Température</div>
+                        <div id="current-temp" class="sensor-value">-- °C</div>
+                    </div>
+
+                    <div class="sensor-card humidity">
+                        <div class="sensor-icon">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
+                        </div>
+                        <div class="sensor-label">Humidité</div>
+                        <div id="current-humidity" class="sensor-value">-- %</div>
+                    </div>
+
+                    <div class="sensor-card smoke">
+                        <div class="sensor-icon">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
+                        </div>
+                        <div class="sensor-label">Fumée</div>
+                        <div id="current-smoke" class="sensor-value">-- ppm</div>
+                    </div>
+
+                    <div class="sensor-card flame">
+                        <div class="sensor-icon">
+                            <img src="images/flame.png" class="sensor-icon-img" alt="Flamme">
+                        </div>
+                        <div class="sensor-label">Flamme</div>
+                        <div id="current-flame" class="sensor-value">--</div>
+                    </div>
+
+                </div>
+
+                <div class="cards-grid" style="margin-top: 24px;">
+
+
+                    <div id="alert-container">
+                        <!-- Le contenu sera généré dynamiquement -->
+                    </div>
+
+                    <!-- Dans la vue émetteur, à la place de la carte "Actions Rapides" -->
+                    <div class="card">
+                        <h3>⚙️ Seuils d'Alerte</h3>
+
+                        <div class="current-thresholds" style="margin: 20px 0;">
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Température :</span>
+                                <span class="threshold-display-value" id="display-temp">---</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Humidité :</span>
+                                <span class="threshold-display-value" id="display-humidity">---%</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Fumée/Gaz :</span>
+                                <span class="threshold-display-value" id="display-smoke">--- ppm</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Flame :</span>
+                                <span class="threshold-display-value" id="display-flame">--- </span>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="openThresholdPopup()">
+                            Modifier les seuils
+                        </button>
+                    </div>
+                </div>
+                <div class="grid-320">
+                    <div class="card">
+                        <h3>🎛️ Commande Manuelle Ventilation</h3>
+                        <div style="margin: 20px 0; text-align: center;">
+                            <p><strong>État actuel :</strong>
+                                <span id="relay-status" style="font-weight: bold; color: #333;">Automatique</span>
+                            </p>
+
+                            <div style="margin: 15px 0;">
+                                <button id="ventil-on" class="btn btn-success" onclick="sendManualCommand(true, true)">
+                                    🔵 Ventilation FORCÉE ON
+                                </button>
+                                <button id="ventil-off" class="btn btn-danger" onclick="sendManualCommand(true, false)">
+                                    🔴 Ventilation FORCÉE OFF
+                                </button>
+                            </div>
+
+                            <button class="btn btn-secondary" onclick="sendManualCommand(false, false)">
+                                ↩️ Retour mode automatique
+                            </button>
+                        </div>
+                        <small style="color: #666; display: block; margin-top: 10px;">
+                            Le mode manuel prend priorité sur la logique automatique.
+                        </small>
+                    </div>
+                    <div class="history-card">
+                        <h3>📜 Historique des Alertes </h3>
+                        <ul id="history-list" class="history-list"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vue Récepteur -->
+            <div id="recepteur" class="view">
+                <div class="sensor-grid">
+
+
+                    <div class="sensor-card temperature">
+                        <div class="sensor-icon">
+                            <img src="images/temperature.png" class="sensor-icon-img" alt="Température">
+                        </div>
+                        <div class="sensor-label">Température Reçue</div>
+                        <div id="recepteur-temp" class="sensor-value">-- °C</div>
+                    </div>
+
+                    <div class="sensor-card humidity">
+                        <div class="sensor-icon">
+                            <img src="images/humidity.png" class="sensor-icon-img" alt="Humidité">
+                        </div>
+                        <div class="sensor-label">Humidité Reçue</div>
+                        <div id="recepteur-humidity" class="sensor-value">-- %</div>
+                    </div>
+
+                    <div class="sensor-card smoke">
+                        <div class="sensor-icon">
+                            <img src="images/smoke.png" class="sensor-icon-img" alt="Fumée">
+                        </div>
+                        <div class="sensor-label">Fumée Reçue</div>
+                        <div id="recepteur-smoke" class="sensor-value">-- ppm</div>
+                    </div>
+
+                </div>
+
+                <div class="cards-grid" style="margin-top: 24px;">
+
+                    <div class="card">
+                        <h3>⚙️ Configuration des Seuils</h3>
+                        <div class="threshold-dropdown">
+                            <div class="threshold-trigger">
+                                <span>Configurer les seuils d'alerte</span>
+                                <span class="threshold-arrow">▼</span>
+                            </div>
+                            <div class="threshold-menu">
+                                <div class="threshold-item">
+                                    <label class="threshold-label">🌡️ Température</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilTemp" value="35" class="threshold-input">
+                                        <span class="threshold-unit">°C</span>
+                                        <button onclick="updateThreshold('temp')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                                <div class="threshold-item">
+                                    <label class="threshold-label">💧 Humidité</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilHumidity" value="80" class="threshold-input">
+                                        <span class="threshold-unit">%</span>
+                                        <button onclick="updateThreshold('humidity')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                                <div class="threshold-item">
+                                    <label class="threshold-label">💨 Fumée</label>
+                                    <div class="threshold-input-group">
+                                        <input type="number" id="seuilSmoke" value="100" class="threshold-input">
+                                        <span class="threshold-unit">ppm</span>
+                                        <button onclick="updateThreshold('smoke')" class="btn-apply">✓</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="current-thresholds">
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Température:</span>
+                                <span class="threshold-display-value" id="display-temp">35°C</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Humidité:</span>
+                                <span class="threshold-display-value" id="display-humidity">80%</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Fumée:</span>
+                                <span class="threshold-display-value" id="display-smoke">100 ppm</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Flame:</span>
+                                <span class="threshold-display-value" id="display-flame">100 ppm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="recepteur-alert-container">
+                        <!-- Le contenu sera généré dynamiquement -->
+                    </div>
+
+                </div>
+
+                <div class="history-card">
+                    <h3>📜 Historique des Réceptions</h3>
+                    <ul id="recepteur-history" class="history-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup de modification des seuils -->
+    <div id="thresholdPopup" class="popup" style="display:none;">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h2>Configurer les Seuils d'Alerte</h2>
+                <button class="close-btn" onclick="closeThresholdPopup()">×</button>
+            </div>
+
+            <div class="popup-body">
+                <div class="form-group">
+                    <label>🌡️ Température maximale</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilTemp" step="0.5" min="0" max="100">
+                        <span class="unit">°C</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>💧 Humidité maximale</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilHumidity" min="0" max="100">
+                        <span class="unit">%</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>💨 Fumée / Gaz (ppm)</label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilSmoke" min="0" max="5000">
+                        <span class="unit">ppm</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🔥 Détection Flamme </label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilFlame" min="0" max="5000">
+                        <span class="unit"> </span>
+                    </div>
+                    <small class="field-help">
+                        Plus la valeur est basse → flamme plus intense/proche.<br>
+                        Typique : 2000-2500 en air normal. </small>
+                </div>
+            </div>
+
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeThresholdPopup()">Annuler</button>
+                <button class="btn btn-primary" onclick="saveThresholds()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loader global -->
+    <div id="global-loader" class="loader-overlay">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p id="loader-text">Chargement en cours...</p>
+        </div>
+    </div>
+</body>
+
+</html>
