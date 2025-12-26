@@ -8,13 +8,18 @@ let datas = {
     temp: 0,
     humidity: 0,
     smoke: 0,
+    flame: 0,
     seuils: {
         seuilTemp: null,
         seuilHumidity: null,
-        seuilSmoke: null
+        seuilSmoke: null,
+        seuilFlame: null,
     },
-    history: []   // sera rempli par les données envoyées par l'ESP32
+    history: [],  // sera rempli par les données envoyées par l'ESP32 , uniquement a la premiere connexion
+    newAlerte: null
 };
+
+let isFIrstData = true
 
 // ==========================================
 // CONNEXION WEBSOCKET
@@ -30,11 +35,19 @@ ws.onmessage = async function (event) {
         const text = await new Blob([event.data]).text();
         const receivedData = JSON.parse(text);
 
-        datas = receivedData
+        if (isFIrstData) {
+            datas = receivedData;
+            isFIrstData = false;
+        } else {
+            if (receivedData?.newAlerte) {
+                datas.history = [receivedData.newAlerte, ...datas.history];
+            }
 
-        // On force la cohérence des noms (au cas où)
-        if (datas.smoke === undefined && receivedData.gas !== undefined) {
-            datas.smoke = receivedData.gas;
+            datas = {
+                ...datas,
+                ...receivedData,
+                newAlerte: null
+            }
         }
 
         refreshAllViews();
@@ -120,6 +133,15 @@ function detectAlerts() {
         });
     }
 
+    if (datas.flame <= datas.seuils.seuilFlame) {
+        alerts.push({
+            type: 'flame',
+            icon: '🔥',
+            label: 'Alerte Flamme',
+            value: `${datas.flame} (Seuil: ≤ ${datas.seuils.seuilFlame})`
+        });
+    }
+
     return alerts;
 }
 
@@ -169,6 +191,7 @@ function refreshAllViews() {
     document.getElementById('emetteur-temp').innerText = datas.temp.toFixed(1) + ' °C';
     document.getElementById('emetteur-humidity').innerText = datas.humidity.toFixed(1) + ' %';
     document.getElementById('emetteur-smoke').innerText = datas.smoke.toFixed(0) + ' ppm';
+    document.getElementById('emetteur-flame').innerText = datas.flame.toFixed(0);
 
     document.getElementById('recepteur-temp').innerText = datas.temp.toFixed(1) + ' °C';
     document.getElementById('recepteur-humidity').innerText = datas.humidity.toFixed(1) + ' %';
@@ -178,10 +201,30 @@ function refreshAllViews() {
     document.getElementById('display-temp').innerText = datas.seuils.seuilTemp + '°C';
     document.getElementById('display-humidity').innerText = datas.seuils.seuilHumidity + '%';
     document.getElementById('display-smoke').innerText = datas.seuils.seuilSmoke + ' ppm';
+    document.getElementById('display-flame').innerText = datas.seuils.seuilFlame;
+
+    document.getElementById('emetteur-flame').innerText = datas.flame < datas.seuils.seuilFlame ? 'FLAMME !' : datas.flame;
 
     // Alertes
     displayAlerts('emetteur-alert-container', '⚠️ ACTION URGENTE DU MAINTENANCIER REQUISE ⚠️');
     displayAlerts('recepteur-alert-container', '🚨 DANGER - VEUILLEZ CONTACTER URGEMMENT LE MAINTENANCIER 🚨');
+
+
+    // État du relais / ventilation
+    const statusText = datas?.manualOverride
+        ? (datas.manualVentilState ? "FORCÉE ON" : "FORCÉE OFF")
+        : "Automatique";
+
+    const statusColor = datas?.manualOverride
+        ? (datas.manualVentilState ? "#28a745" : "#dc3545")
+        : "#666";
+
+    document.getElementById('relay-status').innerText = statusText;
+    document.getElementById('relay-status').style.color = statusColor;
+
+    // Optionnel : changer le style des boutons
+    document.getElementById('ventil-on').style.opacity = datas?.manualOverride && datas.manualVentilState ? "1" : "0.6";
+    document.getElementById('ventil-off').style.opacity = datas?.manualOverride && !datas.manualVentilState ? "1" : "0.6";
 
     // Historique
     updateHistory();
@@ -204,13 +247,14 @@ function updateHistory() {
 
             const typeLabel = entry.type === 'TEMPERATURE' ? 'Température' :
                 entry.type === 'HUMIDITY' ? 'Humidité' :
-                    entry.type === 'SMOKE' ? 'Fumée/Gaz' : entry.type;
+                    entry.type === 'FLAME' ? 'Flame' :
+                        entry.type === 'SMOKE' ? 'Fumée/Gaz' : entry.type;
 
             li.innerHTML = `
-                <span class="history-time">${entry.time}</span>
+                <span class="history-time">${entry?.time}</span>
                 <div class="history-event">
                     <strong>${typeLabel}</strong> dépassement : ${entry.val?.toFixed(1) ?? '-'} 
-                    ${entry.type === 'TEMPERATURE' ? '°C' : entry.type === 'HUMIDITY' ? '%' : 'ppm'}
+                    ${entry.type === 'TEMPERATURE' ? '°C' : entry.type === 'HUMIDITY' ? '%' : entry.type === 'HUMIDITY' ? 'ppm' : ''}
                 </div>
             `;
             historyList.appendChild(li);
@@ -236,6 +280,7 @@ function openThresholdPopup() {
     document.getElementById('popupSeuilTemp').value = datas.seuils.seuilTemp ?? 0;
     document.getElementById('popupSeuilHumidity').value = datas.seuils.seuilHumidity ?? 0;
     document.getElementById('popupSeuilSmoke').value = datas.seuils.seuilSmoke ?? 0;
+    document.getElementById('popupSeuilFlame').value = datas.seuils.seuilFlame ?? 0;
 
     document.getElementById('thresholdPopup').style.display = 'flex';
 }
@@ -248,10 +293,12 @@ function saveThresholds() {
     const temp = parseFloat(document.getElementById('popupSeuilTemp').value);
     const hum = parseFloat(document.getElementById('popupSeuilHumidity').value);
     const smoke = parseInt(document.getElementById('popupSeuilSmoke').value);
+    const flame = parseInt(document.getElementById('popupSeuilFlame').value);
 
     if (!isNaN(temp)) datas.seuils.seuilTemp = temp;
     if (!isNaN(hum)) datas.seuils.seuilHumidity = hum;
     if (!isNaN(smoke)) datas.seuils.seuilSmoke = smoke;
+    if (!isNaN(flame)) datas.seuils.seuilFlame = flame;
 
     //  envoyer les nouveaux seuils à l'ESP32 via WebSocket
     ws.send(JSON.stringify({ command: "update_thresholds", seuils: datas.seuils }));
@@ -260,6 +307,15 @@ function saveThresholds() {
     refreshAllViews();
 
     closeThresholdPopup();
+}
+
+function sendManualCommand(override, state) {
+    const command = {
+        command: "manual_ventil",
+        override: override,    // true = activer le mode manuel
+        state: state           // true = ON, false = OFF (ignoré si override=false)
+    };
+    ws.send(JSON.stringify(command));
 }
 
 // ==========================================

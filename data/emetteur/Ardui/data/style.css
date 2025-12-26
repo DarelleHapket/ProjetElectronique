@@ -393,6 +393,9 @@ body {
 .sensor-card.temperature {
     border-top: 4px solid #FF8C00;
 }
+.sensor-card.flame {
+    border-top: 4px solid #f5170f;
+}
 
 .sensor-card.humidity {
     border-top: 4px solid #1a1a2e;
@@ -810,6 +813,11 @@ body {
     gap: 12px;
     background: #f8f9fa;
 } 
+.grid-320{ 
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 10px;
+}
 
 
 

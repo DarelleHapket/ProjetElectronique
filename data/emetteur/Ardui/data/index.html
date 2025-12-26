@@ -75,9 +75,13 @@
                         <div id="emetteur-smoke" class="sensor-value">-- ppm</div>
                     </div>
 
-
-
-
+                    <div class="sensor-card flame">
+                        <div class="sensor-icon">
+                            <img src="images/flame.png" class="sensor-icon-img" alt="Flamme">
+                        </div>
+                        <div class="sensor-label">Flamme</div>
+                        <div id="emetteur-flame" class="sensor-value">--</div>
+                    </div>
 
                 </div>
 
@@ -95,15 +99,19 @@
                         <div class="current-thresholds" style="margin: 20px 0;">
                             <div class="threshold-display">
                                 <span class="threshold-display-label">Température :</span>
-                                <span class="threshold-display-value" id="display-temp">35°C</span>
+                                <span class="threshold-display-value" id="display-temp">---</span>
                             </div>
                             <div class="threshold-display">
                                 <span class="threshold-display-label">Humidité :</span>
-                                <span class="threshold-display-value" id="display-humidity">80%</span>
+                                <span class="threshold-display-value" id="display-humidity">---%</span>
                             </div>
                             <div class="threshold-display">
                                 <span class="threshold-display-label">Fumée/Gaz :</span>
-                                <span class="threshold-display-value" id="display-smoke">1500 ppm</span>
+                                <span class="threshold-display-value" id="display-smoke">--- ppm</span>
+                            </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Flame :</span>
+                                <span class="threshold-display-value" id="display-flame">--- </span>
                             </div>
                         </div>
 
@@ -112,10 +120,35 @@
                         </button>
                     </div>
                 </div>
+                <div class="grid-320">
+                    <div class="card">
+                        <h3>🎛️ Commande Manuelle Ventilation</h3>
+                        <div style="margin: 20px 0; text-align: center;">
+                            <p><strong>État actuel :</strong>
+                                <span id="relay-status" style="font-weight: bold; color: #333;">Automatique</span>
+                            </p>
 
-                <div class="history-card">
-                    <h3>📜 Historique des Alertes </h3>
-                    <ul id="emetteur-history" class="history-list"></ul>
+                            <div style="margin: 15px 0;">
+                                <button id="ventil-on" class="btn btn-success" onclick="sendManualCommand(true, true)">
+                                    🔵 Ventilation FORCÉE ON
+                                </button>
+                                <button id="ventil-off" class="btn btn-danger" onclick="sendManualCommand(true, false)">
+                                    🔴 Ventilation FORCÉE OFF
+                                </button>
+                            </div>
+
+                            <button class="btn btn-secondary" onclick="sendManualCommand(false, false)">
+                                ↩️ Retour mode automatique
+                            </button>
+                        </div>
+                        <small style="color: #666; display: block; margin-top: 10px;">
+                            Le mode manuel prend priorité sur la logique automatique.
+                        </small>
+                    </div>
+                    <div class="history-card">
+                        <h3>📜 Historique des Alertes </h3>
+                        <ul id="emetteur-history" class="history-list"></ul>
+                    </div>
                 </div>
             </div>
 
@@ -199,6 +232,10 @@
                                 <span class="threshold-display-label">Fumée:</span>
                                 <span class="threshold-display-value" id="display-smoke">100 ppm</span>
                             </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Flame:</span>
+                                <span class="threshold-display-value" id="display-flame">100 ppm</span>
+                            </div>
                         </div>
                     </div>
 
@@ -247,6 +284,16 @@
                         <input type="number" id="popupSeuilSmoke" min="0" max="5000">
                         <span class="unit">ppm</span>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>🔥 Détection Flamme </label>
+                    <div class="input-group">
+                        <input type="number" id="popupSeuilFlame" min="0" max="5000">
+                        <span class="unit"> </span>
+                    </div>
+                    <small class="field-help">
+                        Plus la valeur est basse → flamme plus intense/proche.<br>
+                        Typique : 2000-2500 en air normal. </small>
                 </div>
             </div>
 
