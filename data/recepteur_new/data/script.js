@@ -3,6 +3,7 @@
 // ==========================================
 let datas = {
     isA: false,
+    isRC: false, //commande recu
     temp: 0,
     hum: 0,
     sm: 0,
@@ -19,6 +20,7 @@ let datas = {
     nAlrt: null
 };
 
+let isSendingCommand = false;
 let isFirstData = true;
 let ws = null;
 let reconnectAttempts = 0;
@@ -76,7 +78,13 @@ function connectWebSocket() {
                 // Fusion sans écraser l'historique
                 datas = { ...datas, ...received, nAlrt: null };
             }
-            hideLoader();
+            if (isFirstData || !isSendingCommand || (isSendingCommand && datas?.isRC)) {
+                if (isSendingCommand) {
+                    closeThresholdPopup()
+                    isSendingCommand = false
+                }
+                hideLoader()
+            }
             refreshView();
         } catch (e) {
             console.error("Erreur lors du parsing du message WebSocket :", e);
@@ -114,17 +122,17 @@ function attemptReconnect() {
 function detectAlerts() {
     const alerts = [];
 
-    if (datas.temp >= datas.seuils.sT) {
-        alerts.push({ icon: '🌡️', label: 'Température élevée', value: `${datas.temp?.toFixed(1)}°C (≥ ${datas.seuils.sT}°C)` });
+    if (datas.temp >= datas.seuils?.sT) {
+        alerts.push({ icon: '🌡️', label: 'Température élevée', value: `${datas.temp?.toFixed(1)}°C (≥ ${datas.seuils?.sT}°C)` });
     }
-    if (datas.hum >= datas.seuils.sH) {
-        alerts.push({ icon: '💧', label: 'Humidité élevée', value: `${datas.hum?.toFixed(1)}% (≥ ${datas.seuils.sH}%)` });
+    if (datas.hum >= datas.seuils?.sH) {
+        alerts.push({ icon: '💧', label: 'Humidité élevée', value: `${datas.hum?.toFixed(1)}% (≥ ${datas.seuils?.sH}%)` });
     }
-    if (datas.sm >= datas.seuils.sSm) {
-        alerts.push({ icon: '💨', label: 'Fumée / Gaz détecté', value: `${datas.sm} ppm (≥ ${datas.seuils.sSm} ppm)` });
+    if (datas.sm >= datas.seuils?.sSm) {
+        alerts.push({ icon: '💨', label: 'Fumée / Gaz détecté', value: `${datas.sm} ppm (≥ ${datas.seuils?.sSm} ppm)` });
     }
-    if (datas.fl <= datas.seuils.sF) {
-        alerts.push({ icon: '🔥', label: 'Flamme détectée', value: `Valeur: ${datas.fl} (≤ ${datas.seuils.sF})` });
+    if (datas.fl <= datas.seuils?.sF) {
+        alerts.push({ icon: '🔥', label: 'Flamme détectée', value: `Valeur: ${datas.fl} (≤ ${datas.seuils?.sF})` });
     }
 
     return alerts;
@@ -187,13 +195,13 @@ function refreshView() {
     document.getElementById('current-smoke').innerText = smokeDisplay;
 
     // Flamme (pas de toFixed, mais on garde une sécurité)
-    const flameDisplay = datas.fl < datas.seuils.sF ? 'FLAMME !' : datas.fl;
+    const flameDisplay = datas.fl;
     document.getElementById('current-flame').innerText = flameDisplay;
 
-    document.getElementById('display-temp').innerText = datas.seuils.sT + ' °C';
-    document.getElementById('display-humidity').innerText = datas.seuils.sH + ' %';
-    document.getElementById('display-smoke').innerText = datas.seuils.sSm + ' ppm';
-    document.getElementById('display-flame').innerText = '≤ ' + datas.seuils.sF;
+    document.getElementById('display-temp').innerText = datas.seuils?.sT + ' °C';
+    document.getElementById('display-humidity').innerText = datas.seuils?.sH + ' %';
+    document.getElementById('display-smoke').innerText = datas.seuils?.sSm + ' ppm';
+    document.getElementById('display-flame').innerText = '≤ ' + datas.seuils?.sF;
 
     const statusText = datas.mnlOvrr
         ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
@@ -279,11 +287,8 @@ function saveThresholds() {
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ com: "upd_seuils", seuils: datas.seuils }));
+        isSendingCommand = true;
     }
-
-    setTimeout(() => hideLoader(), 5000);
-    refreshView();
-    closeThresholdPopup();
 }
 
 function sendManualCommand(override, state) {
@@ -299,9 +304,9 @@ function sendManualCommand(override, state) {
             override: override,
             state: state
         }));
+        isSendingCommand = true;
     }
 
-    // setTimeout(() => hideLoader(), 3000);
 }
 
 // ==========================================
