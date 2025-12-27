@@ -1,6 +1,6 @@
 {
-    "seuilTemp": 33,
-    "seuilHumidity": 80,
-    "seuilSmoke": 1400,
-    "seuilFlame": 2001
+    "sT": 33,
+    "sH": 80,
+    "sSm": 1400,
+    "sF": 2001
 }

@@ -117,19 +117,19 @@ void loadSettings()
         return;
     }
 
-    tempSeuil = doc["seuilTemp"] | TEMP_SEUIL_DEFAULT;
-    humSeuil = doc["seuilHumidity"] | HUM_SEUIL_DEFAULT;
-    smokeSeuil = doc["seuilSmoke"] | SMOKE_SEUIL_DEFAULT;
-    seuilFlame = doc["seuilFlame"] | FLAME_SEUIL_DEFAULT;
+    tempSeuil = doc["sT"] | TEMP_SEUIL_DEFAULT;
+    humSeuil = doc["sH"] | HUM_SEUIL_DEFAULT;
+    smokeSeuil = doc["sSm"] | SMOKE_SEUIL_DEFAULT;
+    seuilFlame = doc["sF"] | FLAME_SEUIL_DEFAULT;
 }
 
 void saveSettings()
 {
     StaticJsonDocument<256> doc;
-    doc["seuilTemp"] = tempSeuil;
-    doc["seuilHumidity"] = humSeuil;
-    doc["seuilSmoke"] = smokeSeuil;
-    doc["seuilFlame"] = seuilFlame;
+    doc["sT"] = tempSeuil;
+    doc["sH"] = humSeuil;
+    doc["sSm"] = smokeSeuil;
+    doc["sF"] = seuilFlame;
 
     File file = LittleFS.open("/db/settings.json", "w");
     if (!file)
@@ -149,31 +149,29 @@ void saveSettings()
 
 void handleCommand(const JsonDocument &doc)
 {
-    if (doc["command"] == "update_thresholds")
+    if (doc["com"] == "upd_seuils")
     {
         JsonVariantConst v = doc["seuils"];
         if (!v.isNull() && v.is<JsonObjectConst>())
         {
             JsonObjectConst seuils = v.as<JsonObjectConst>();
 
-            tempSeuil  = seuils["seuilTemp"]     | tempSeuil;
-            humSeuil   = seuils["seuilHumidity"] | humSeuil;
-            smokeSeuil = seuils["seuilSmoke"]    | smokeSeuil;
-            seuilFlame = seuils["seuilFlame"]    | seuilFlame;
+            tempSeuil = seuils["sT"] | tempSeuil;
+            humSeuil = seuils["sH"] | humSeuil;
+            smokeSeuil = seuils["sSm"] | smokeSeuil;
+            seuilFlame = seuils["sF"] | seuilFlame;
 
             saveSettings();
             Serial.println("Nouveaux seuils reçus et enregistrés");
         }
     }
 
-    if (doc["command"] == "manual_ventil")
+    if (doc["com"] == "mnl_vent")
     {
         overrideActive = doc["override"] | false;
-        manualVentil   = doc["state"]    | false;
+        manualVentil = doc["state"] | false;
     }
 }
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Gestion WebSocket
@@ -207,7 +205,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     }
     else if (type == WS_EVT_DATA)
     {
-        // Gestion des commandes (update_thresholds, manual_ventil)
+        // Gestion des commandes (upd_seuils, mnl_vent)
         String message;
         for (size_t i = 0; i < len; i++)
             message += (char)data[i];
@@ -239,50 +237,49 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
     {
         capacity += historyDoc.memoryUsage(); // Estimation sûre de l'historique
     }
-    capacity += 256; // Marge pour newAlerte et strings
+    capacity += 128; 
 
     DynamicJsonDocument doc(capacity);
-
-    doc["success"] = true;
-    doc["isAlert"] = isAlert;
+ 
+    doc["isA"] = isAlert;
 
     JsonArray types = doc.createNestedArray("alertType");
     if (tempAlert)
-        types.add("TEMPERATURE");
+        types.add("T");
     if (humAlert)
-        types.add("HUMIDITY");
+        types.add("H");
     if (smokeAlert)
-        types.add("SMOKE");
+        types.add("S");
     if (flameAlert)
-        types.add("FLAME");
+        types.add("F");
 
     doc["temp"] = temp;
-    doc["humidity"] = hum;
-    doc["smoke"] = smoke;
-    doc["flame"] = flame;
-    doc["manualOverride"] = overrideActive;
-    doc["manualVentilState"] = manualVentil;
+    doc["hum"] = hum;
+    doc["sm"] = smoke;
+    doc["fl"] = flame;
+    doc["mnlOvrr"] = overrideActive;
+    doc["mnlVent"] = manualVentil;
 
     JsonObject seuils = doc.createNestedObject("seuils");
-    seuils["seuilTemp"] = tempSeuil;
-    seuils["seuilHumidity"] = humSeuil;
-    seuils["seuilSmoke"] = smokeSeuil;
-    seuils["seuilFlame"] = seuilFlame;
+    seuils["sT"] = tempSeuil;
+    seuils["sH"] = humSeuil;
+    seuils["sSm"] = smokeSeuil;
+    seuils["sF"] = seuilFlame;
 
     // Ajout conditionnel de l'historique complet
     if (withAllHistory)
     {
-        doc["history"] = history;
+        doc["his"] = history;
     }
 
     // Ajout de la nouvelle alerte (toujours présent, peut être null)
     if (hasNewAlerte && !newAlerte.isNull())
     {
-        doc["newAlerte"] = newAlerte;
+        doc["nAlrt"] = newAlerte;
     }
     else
     {
-        doc["newAlerte"] = nullptr;
+        doc["nAlrt"] = nullptr;
     }
 
     String jsonStr;
@@ -294,7 +291,7 @@ String getFormatedTime()
 {
     if (!timeReferenceSet)
     {
-        return "En attente...";
+        return "NC";
     }
 
     unsigned long elapsedMillis = millis() - timeReference;
@@ -416,7 +413,7 @@ void setup()
 
     LoRa.setSyncWord(0xF3);
     // LoRa.setSpreadingFactor(12); a 10 la distance est divisee par 4 mais plus rapide
-    LoRa.setSpreadingFactor(9);
+    LoRa.setSpreadingFactor(12);
     LoRa.setSignalBandwidth(125E3);
     LoRa.setCodingRate4(8);
     LoRa.setTxPower(20);
@@ -513,31 +510,31 @@ void loop()
         }
 
         JsonObject obj = history.createNestedObject();
-        obj["time"] = getFormatedTime();
+        obj["t"] = getFormatedTime();
 
         hasNewAlerte = false;
 
         if (tempAlert)
         {
-            obj["type"] = "TEMPERATURE";
+            obj["var"] = "T";
             obj["val"] = temp_moy;
             hasNewAlerte = true;
         }
         if (humAlert)
         {
-            obj["type"] = "HUMIDITY";
+            obj["var"] = "H";
             obj["val"] = hum_moy;
             hasNewAlerte = true;
         }
         if (smokeAlert)
         {
-            obj["type"] = "SMOKE";
+            obj["var"] = "S";
             obj["val"] = smoke;
             hasNewAlerte = true;
         }
         if (flameAlert)
         {
-            obj["type"] = "FLAME";
+            obj["var"] = "F";
             obj["val"] = flame;
             hasNewAlerte = true;
         }
@@ -600,5 +597,5 @@ void loop()
     }
 
     ws.cleanupClients();
-    delay(50);
+    // delay(10);
 }
