@@ -11,10 +11,14 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <time.h>
+#define TINY_GSM_MODEM_SIM800
+#include <TinyGsmClient.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Constantes et définitions matérielles
 // ─────────────────────────────────────────────────────────────────────────────
+
+
 
 #define DHT_1_PIN 4
 #define DHT_2_PIN 15
@@ -25,6 +29,8 @@
 #define LED_R_PIN 33
 #define BUZZER_PIN 13
 #define FLAME_PIN 32
+#define LCD_SDA_PIN 21
+#define LCD_SCL_PIN 22
 
 // Pins LoRa
 #define LORA_SCK 18
@@ -34,8 +40,23 @@
 #define LORA_RST 12
 #define LORA_DIO0 26
 
+// UART vers SIM800L
+#define SerialAT Serial2
+#define MODEM_RX 16
+#define MODEM_TX 15
+// Configuration – À CHANGER
+#define SMS_TARGET "+237695680531"
+#define CALL_TARGET "+237695680531"
+#define APN ""
+TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
+
+// Variables pour l'heure réelle GSM
+bool gsmTimeInitialized = false;
+unsigned long gsmTimeOffset = 0;
+
 // WiFi Access Point
-const char *ap_ssid = "AlarmeGaz-ESP32";
+const char *ap_ssid = "Module emetteur";
 const char *ap_password = "12345678";
 IPAddress ap_ip(192, 168, 4, 1);
 
@@ -67,7 +88,7 @@ bool timeReferenceSet = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 DHT dht1(DHT_1_PIN, DHT_TYPE);
-DHT dht2(DHT_2_PIN, DHT_TYPE);
+// DHT dht2(DHT_2_PIN, DHT_TYPE);
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -103,6 +124,53 @@ void updateActuators(bool alert) {
   digitalWrite(LED_R_PIN, alert ? HIGH : LOW);
   digitalWrite(LED_V_PIN, alert ? LOW : HIGH);
   digitalWrite(BUZZER_PIN, alert ? HIGH : LOW);
+}
+
+// -----------------------------------------------------------------------------
+// Fonctions pour les alertes gsm
+// -----------------------------------------------------------------------------
+void sendAlertGSM(const String &message) {
+
+  if (!modem.isNetworkConnected()) {
+    Serial.println("[GSM] Réseau non connecté → abandon alerte GSM");
+    return;
+  }
+
+  // 1. Envoi SMS
+  Serial.print("[GSM] Envoi SMS → ");
+  Serial.println(message);
+
+  if (modem.sendSMS(SMS_TARGET, message)) {
+    Serial.println("→ SMS envoyé OK");
+  } else {
+    Serial.println("→ ÉCHEC envoi SMS");
+  }
+
+  // 2. Appel sortant (sonne ~20 secondes puis raccroche)
+  Serial.print("[GSM] Appel sortant vers ");
+  Serial.print(CALL_TARGET);
+  Serial.println(" ...");
+
+  SerialAT.print("ATD");
+  SerialAT.print(CALL_TARGET);
+  SerialAT.println(";");
+
+  // On laisse sonner ~20 secondes
+  unsigned long debutAppel = millis();
+  while (millis() - debutAppel < 20000UL) {
+    if (SerialAT.available()) {
+      String ligne = SerialAT.readStringUntil('\n');
+      Serial.println("[GSM] → " + ligne);
+      if (ligne.indexOf("NO CARRIER") >= 0 || ligne.indexOf("BUSY") >= 0) {
+        break;
+      }
+    }
+    delay(100);
+  }
+
+  // Raccrocher dans tous les cas
+  SerialAT.println("ATH");
+  Serial.println("[GSM] Appel terminé (ATH envoyé)");
 }
 
 
@@ -284,23 +352,32 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
 }
 
 String getFormatedTime() {
-  if (!timeReferenceSet) {
-    return "NC";
+  if (gsmTimeInitialized) {
+    unsigned long now_ms = millis() + gsmTimeOffset;
+    time_t now = now_ms / 1000;
+
+    struct tm *timeinfo = localtime(&now);
+
+    char buf[20];
+    // Format : 14:35:22 ou 02/21 14:35 selon préférence
+    strftime(buf, sizeof(buf), "%H:%M:%S", timeinfo);
+    // ou strftime(buf, sizeof(buf), "%m/%d %H:%M", timeinfo);  ← autre style
+    return String(buf);
   }
 
-  unsigned long elapsedMillis = millis() - timeReference;
-  unsigned long elapsedSeconds = elapsedMillis / 1000;
-  unsigned long hours = elapsedSeconds / 3600;
-  unsigned long minutes = (elapsedSeconds % 3600) / 60;
-  unsigned long seconds = elapsedSeconds % 60;
+  // Fallback : temps depuis démarrage
+  if (!timeReferenceSet) return "NC";
 
-  char timeStr[20];
-  if (hours > 0) {
-    snprintf(timeStr, sizeof(timeStr), "%02lu:%02lu:%02lu", hours, minutes, seconds);
-  } else {
-    snprintf(timeStr, sizeof(timeStr), "%02lu:%02lu", minutes, seconds);
-  }
-  return String(timeStr);
+  unsigned long elapsed = (millis() - timeReference) / 1000;
+  unsigned long h = elapsed / 3600;
+  unsigned long m = (elapsed % 3600) / 60;
+  unsigned long s = elapsed % 60;
+
+  char buf[12];
+  if (h > 0) snprintf(buf, sizeof(buf), "%02lu:%02lu:%02lu", h, m, s);
+  else snprintf(buf, sizeof(buf), "%02lu:%02lu", m, s);
+
+  return String(buf);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,9 +396,9 @@ void setup() {
   digitalWrite(LED_V_PIN, HIGH);
 
   dht1.begin();
-  dht2.begin();
+  // dht2.begin();
 
-  Wire.begin(21, 22);
+  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
   lcd.init();
   lcd.backlight();
   lcd.print("Demarrage...");
@@ -355,6 +432,7 @@ void setup() {
 
   // WiFi AP + Station (pour NTP)
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setSleep(false);
 
   // Connexion WiFi Station (NTP)
   WiFi.begin(sta_ssid, sta_password);
@@ -367,6 +445,8 @@ void setup() {
 
   // Démarrage AP
   WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255, 255, 255, 0));
+  WiFi.softAP(ap_ssid, ap_password, 6, 0);
+Serial.println("AP démarré sur canal 6 fixe");
   if (WiFi.softAP(ap_ssid, ap_password)) {
     Serial.println("Point d'accès démarré");
     Serial.printf("SSID: %s  -  Mot de passe: %s  -  IP: %s\n",
@@ -389,12 +469,64 @@ void setup() {
   }
 
   LoRa.setSyncWord(0xF3);
-  // LoRa.setSpreadingFactor(12); a 10 la distance est divisee par 4 mais plus rapide
   LoRa.setSpreadingFactor(9);
+  // LoRa.setSpreadingFactor(9); a 10 la distance est divisee par 4 mais plus rapide
   LoRa.setSignalBandwidth(125E3);
   LoRa.setCodingRate4(8);
   LoRa.setTxPower(20);
   Serial.println("LoRa OK");
+
+  // ─── Initialisation SIM800L ───────────────────────────────────────────────
+  Serial.println("Initialisation SIM800L...");
+  SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+  delay(1800);
+
+  if (!modem.restart()) {
+    Serial.println("→ modem.restart() échoué !");
+  } else {
+    Serial.println("→ modem redémarré");
+  }
+
+  delay(2000);
+
+  // Attente réseau (max 60s)
+  if (!modem.waitForNetwork(60000L)) {
+    Serial.println("→ Pas de réseau GSM après 60s");
+  } else {
+    Serial.println("→ Réseau GSM OK");
+    Serial.println("Opérateur : " + modem.getOperator());
+
+    // Récupération heure réseau (format "yy/MM/dd,hh:mm:ss±zz")
+    // Récupération heure réseau via pointeurs
+    int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+    float timezone = 0.0;
+
+    if (modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &timezone)) {
+      Serial.printf("→ Heure réseau : %02d/%02d/%02d  %02d:%02d:%02d  (fuseau %.1f h)\n",
+                    year, month, day, hour, minute, second, timezone);
+
+      struct tm timeinfo = { 0 };
+      timeinfo.tm_year = year + 2000 - 1900;  // années depuis 1900
+      timeinfo.tm_mon = month - 1;            // 0 = janvier
+      timeinfo.tm_mday = day;
+      timeinfo.tm_hour = hour;
+      timeinfo.tm_min = minute;
+      timeinfo.tm_sec = second;
+
+      time_t rawtime = mktime(&timeinfo);
+      if (rawtime != -1) {
+        // Ajustement fuseau horaire (timezone est en heures)
+        rawtime += (long)(timezone * 3600);
+        gsmTimeOffset = (unsigned long)rawtime * 1000UL - millis();
+        gsmTimeInitialized = true;
+        Serial.println("→ Heure GSM synchronisée avec succès");
+      } else {
+        Serial.println("→ Échec de mktime()");
+      }
+    } else {
+      Serial.println("→ Échec de getNetworkTime()");
+    }
+  }
 
   // Serveur web
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
@@ -462,12 +594,16 @@ void loop() {
   lcd.setCursor(0, 1);
   lcd.print("T:");
   lcd.print(temp_moy, 1);
+
+  lcd.print(" H:");
+  lcd.print(hum_moy, 1);
   if (flameAlert) {
-    lcd.print("FLAMME!   ");
+    lcd.print(" FLAMME!   ");
   } else {
-    lcd.print("S:");
+    lcd.print(" G:");
     lcd.print(smoke);
-    lcd.print("   ");
+    lcd.print(" FL:");
+    lcd.print(flame);
   }
 
   lastTemp = temp_moy;
@@ -518,6 +654,15 @@ void loop() {
       }
       newAlerte = obj;
     }
+
+    // ─── ENVOI ALERTE GSM ────────────────────────────────────────
+    String alertMsg = "URGENT - Alerte sur module emetteur !\n";
+    if (tempAlert) alertMsg += "Température élevée: " + String(temp_moy, 1) + "°C\n";
+    if (humAlert) alertMsg += "Humidité élevée: " + String(hum_moy, 1) + "%\n";
+    if (smokeAlert) alertMsg += "Détection fumée: " + String(smoke) + "\n";
+    if (flameAlert) alertMsg += "Détection flamme !\n";
+
+    sendAlertGSM(alertMsg);
   } else if (!alerte && prevAlert) {
     // Plus d'alerte → on réinitialise newAlerte
     hasNewAlerte = false;
