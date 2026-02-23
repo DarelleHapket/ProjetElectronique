@@ -83,6 +83,9 @@ bool overrideActive = false;
 unsigned long timeReference = 0;
 bool timeReferenceSet = false;
 
+bool gsmCalling = false;
+unsigned long gsmCallStart = 0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Objets globaux
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +114,7 @@ JsonArray history;
 
 JsonObject newAlerte;
 bool hasNewAlerte = false;
+bool isFlamme = false;
 
 // Détection nouvelle alerte
 bool prevAlert = false;
@@ -128,7 +132,7 @@ void updateActuators(bool alert) {
 
 // -----------------------------------------------------------------------------
 // Fonctions pour les alertes gsm
-// -----------------------------------------------------------------------------
+/*/ -----------------------------------------------------------------------------
 void sendAlertGSM(const String &message) {
 
   if (!modem.isNetworkConnected()) {
@@ -171,8 +175,32 @@ void sendAlertGSM(const String &message) {
   // Raccrocher dans tous les cas
   SerialAT.println("ATH");
   Serial.println("[GSM] Appel terminé (ATH envoyé)");
-}
+}*/
 
+void sendAlertGSM(const String &message) {
+
+  if (!modem.isNetworkConnected()) {
+    Serial.println("[GSM] Réseau non connecté → abandon alerte GSM");
+    return;
+  }
+
+  // SMS
+  if (modem.sendSMS(SMS_TARGET, message)) {
+    Serial.println("→ SMS envoyé OK");
+  } else {
+    Serial.println("→ ÉCHEC envoi SMS");
+  }
+
+  // Lancer appel
+  SerialAT.print("ATD");
+  SerialAT.print(CALL_TARGET);
+  SerialAT.println(";");
+
+  gsmCalling = true;
+  gsmCallStart = millis();
+
+  Serial.println("[GSM] Appel lancé (non bloquant)");
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fonctions de gestion des seuils persistants
@@ -216,6 +244,7 @@ void saveSettings() {
 
   serializeJson(doc, file);
   file.close();
+  debugHistoryFile();
   Serial.println("Seuils sauvegardés dans settings.json");
 }
 
@@ -272,6 +301,11 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
       (lastFlame <= seuilFlame));
 
     client->text(jsonStr);
+
+    Serial.println("Envoi historique complet au client");
+    serializeJson(historyDoc, Serial);
+    Serial.println();
+    
   } else if (type == WS_EVT_DATA) {
     // Gestion des commandes (upd_seuils, mnl_vent)
     String message;
@@ -379,6 +413,32 @@ String getFormatedTime() {
 
   return String(buf);
 }
+
+//TESTS
+void debugHistoryFile() {
+  Serial.println("---- DEBUG HISTORY ----");
+
+  if (!LittleFS.exists("/db/history.json")) {
+    Serial.println("❌ history.json n'existe PAS");
+    return;
+  }
+
+  File file = LittleFS.open("/db/history.json", "r");
+  if (!file) {
+    Serial.println("❌ Impossible d'ouvrir history.json");
+    return;
+  }
+
+  Serial.println("✅ history.json existe. Contenu :");
+
+  while (file.available()) {
+    Serial.write(file.read());
+  }
+
+  file.close();
+  Serial.println("\n---- FIN DEBUG ----");
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SETUP
@@ -642,6 +702,7 @@ void loop() {
       obj["var"] = "F";
       obj["val"] = flame;
       hasNewAlerte = true;
+      isFlame = true;
     }
 
     // Sauvegarde sur disque seulement si une alerte a été ajoutée
@@ -662,11 +723,25 @@ void loop() {
     if (smokeAlert) alertMsg += "Détection fumée: " + String(smoke) + "\n";
     if (flameAlert) alertMsg += "Détection flamme !\n";
 
-    sendAlertGSM(alertMsg);
+    if(isFlame){
+      sendAlertGSM(alertMsg);
+      
+    }
+
   } else if (!alerte && prevAlert) {
     // Plus d'alerte → on réinitialise newAlerte
     hasNewAlerte = false;
     // newAlerte reste valide mais on sait qu'il n'y en a plus de nouvelle
+    isFlame = false;  // Réinitialiser le flag après envoi
+  }
+
+  // Gestion appel GSM non bloquant
+  if (gsmCalling) {
+    if (millis() - gsmCallStart >= 20000UL) {
+        SerialAT.println("ATH");
+        Serial.println("[GSM] Appel terminé (20s écoulées)");
+        gsmCalling = false;
+    }
   }
   prevAlert = alerte;
 
