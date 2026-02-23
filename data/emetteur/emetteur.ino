@@ -45,8 +45,8 @@
 #define MODEM_RX 16
 #define MODEM_TX 15
 // Configuration – À CHANGER
-#define SMS_TARGET "+237695680531"
-#define CALL_TARGET "+237695680531"
+#define SMS_TARGET "+237699974400"
+#define CALL_TARGET "+237699974400"
 #define APN ""
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
@@ -114,7 +114,7 @@ JsonArray history;
 
 JsonObject newAlerte;
 bool hasNewAlerte = false;
-bool isFlamme = false;
+bool isFlame  = false;
 
 // Détection nouvelle alerte
 bool prevAlert = false;
