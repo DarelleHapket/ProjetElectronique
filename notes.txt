@@ -1,0 +1,1 @@
+https://www.makerguides.com/esp32-dht11-dht22-humidity-temperature-sensor/  reference dht11
