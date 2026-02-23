@@ -233,6 +233,10 @@
                                 <span class="threshold-display-label">Flame:</span>
                                 <span class="threshold-display-value" id="display-flame">100 ppm</span>
                             </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Numéro alerte :</span>
+                                <span class="threshold-display-value" id="display-phone">---</span>
+                            </div>
                         </div>
                     </div>
 
@@ -292,6 +296,15 @@
                         Plus la valeur est basse → flamme plus intense/proche.<br>
                         Typique : 2000-2500 en air normal. </small>
                 </div>
+                 <!-- Popup de modification du numéro d'alerte --> 
+                <div class="form-group">
+                    <label>📱 Numéro d'alerte (SMS & appel)</label>
+                    <div class="input-group">
+                        <input type="tel" id="popupPhoneNumber" placeholder="+2376..." pattern="\+?[0-9]{8,15}">
+                        <span class="unit"></span>
+                    </div>
+                    <small class="field-help">Format international recommandé (+237...)</small>
+                </div>
             </div>
 
             <div class="popup-footer">
@@ -300,6 +313,8 @@
             </div>
         </div>
     </div>
+
+   
 
     <!-- Loader global -->
     <div id="global-loader" class="loader-overlay">

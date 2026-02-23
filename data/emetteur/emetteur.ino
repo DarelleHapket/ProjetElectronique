@@ -75,6 +75,7 @@ float tempSeuil = TEMP_SEUIL_DEFAULT;
 float humSeuil = HUM_SEUIL_DEFAULT;
 int smokeSeuil = SMOKE_SEUIL_DEFAULT;
 int seuilFlame = FLAME_SEUIL_DEFAULT;
+String alertPhoneNumber = SMS_TARGET;   // valeur par défaut
 
 // controlle automatique de la ventillation
 bool manualVentil = false;
@@ -140,7 +141,7 @@ void sendAlertGSM(const String &message) {
   Serial.print("[GSM] Envoi SMS → ");
   Serial.println(message);
 
-  if (modem.sendSMS(SMS_TARGET, message)) {
+  if (modem.sendSMS(alertPhoneNumber, message)) {
     Serial.println("→ SMS envoyé OK");
   } else {
     Serial.println("→ ÉCHEC envoi SMS");
@@ -148,11 +149,11 @@ void sendAlertGSM(const String &message) {
 
   // 2. Appel sortant (sonne ~20 secondes puis raccroche)
   Serial.print("[GSM] Appel sortant vers ");
-  Serial.print(CALL_TARGET);
+  Serial.print(alertPhoneNumber);
   Serial.println(" ...");
 
   SerialAT.print("ATD");
-  SerialAT.print(CALL_TARGET);
+  SerialAT.print(alertPhoneNumber);
   SerialAT.println(";");
 
   // On laisse sonner ~20 secondes
@@ -186,7 +187,8 @@ void loadSettings() {
   if (!file)
     return;
 
-  StaticJsonDocument<256> doc;
+ // StaticJsonDocument<256> doc;
+  StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, file);
   file.close();
 
@@ -199,14 +201,25 @@ void loadSettings() {
   humSeuil = doc["sH"] | HUM_SEUIL_DEFAULT;
   smokeSeuil = doc["sSm"] | SMOKE_SEUIL_DEFAULT;
   seuilFlame = doc["sF"] | FLAME_SEUIL_DEFAULT;
+
+  if (doc["tel"].is<String>()) {
+    alertPhoneNumber = doc["tel"].as<String>();
+    // Optionnel : validation basique
+    if (!alertPhoneNumber.startsWith("+")) {
+      alertPhoneNumber = "+" + alertPhoneNumber;
+    }
+    Serial.println("Numéro chargé : " + alertPhoneNumber);
+  }
 }
 
 void saveSettings() {
-  StaticJsonDocument<256> doc;
+ // StaticJsonDocument<256> doc;
+  StaticJsonDocument<512> doc;
   doc["sT"] = tempSeuil;
   doc["sH"] = humSeuil;
   doc["sSm"] = smokeSeuil;
   doc["sF"] = seuilFlame;
+  doc["tel"] = alertPhoneNumber;
 
   File file = LittleFS.open("/db/settings.json", "w");
   if (!file) {
@@ -216,7 +229,7 @@ void saveSettings() {
 
   serializeJson(doc, file);
   file.close();
-  Serial.println("Seuils sauvegardés dans settings.json");
+  Serial.println("Paramètres sauvegardés dans settings.json");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -237,7 +250,27 @@ void handleCommand(const JsonDocument &doc) {
       saveSettings();
       Serial.println("Nouveaux seuils reçus et enregistrés");
     }
+
+    // ← AJOUT IMPORTANT : gérer le téléphone dans le même message
+    if (doc.containsKey("tel")) {
+      String newPhone = doc["tel"] | "";
+      newPhone.trim();
+
+      if (newPhone.length() >= 9 && 
+        (newPhone.startsWith("+") || newPhone.startsWith("00")) &&
+        newPhone.substring(1).toInt() > 0) {
+
+        if (!newPhone.startsWith("+")) newPhone = "+" + newPhone;
+          alertPhoneNumber = newPhone;
+          saveSettings();   // on resauvegarde si tel changé
+          Serial.println("Nouveau numéro enregistré via upd_seuils : " + alertPhoneNumber);
+        } else {
+            Serial.println("Numéro invalide ignoré dans upd_seuils : '" + newPhone + "'");
+        }
+    }
   }
+
+  
 
   if (doc["com"] == "mnl_vent") {
     overrideActive = doc["override"] | false;
@@ -305,6 +338,8 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
   capacity += 128;
 
   DynamicJsonDocument doc(capacity);
+
+  doc["tel"] = alertPhoneNumber;
 
   doc["isA"] = isAlert;
   doc["isRC"] = receiveCommand;

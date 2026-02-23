@@ -17,7 +17,8 @@ let datas = {
         sF: null,
     },
     his: [],
-    nAlrt: null
+    nAlrt: null,
+    tel: null,
 };
 let isSendingCommand = false;
 let isFirstData = true;
@@ -215,6 +216,13 @@ function refreshView() {
     document.getElementById('ventil-on').style.opacity = datas.mnlOvrr && datas.mnlVent ? "1" : "0.6";
     document.getElementById('ventil-off').style.opacity = datas.mnlOvrr && !datas.mnlVent ? "1" : "0.6";
 
+    if (datas.tel) {
+        document.getElementById('display-phone').innerText = datas.tel;
+        // ou 'display-phone-current' selon le nom choisi
+    } else {
+        document.getElementById('display-phone').innerText = "Non configuré";
+    }
+
     displayAlerts();
     updateHistory();
 }
@@ -264,6 +272,7 @@ function openThresholdPopup() {
     document.getElementById('popupSeuilSmoke').value = datas?.seuils?.sSm ?? '';
     document.getElementById('popupSeuilFlame').value = datas?.seuils?.sF ?? '';
     document.getElementById('thresholdPopup').style.display = 'flex';
+    document.getElementById('popupPhoneNumber').value = datas?.tel ?? '';
 }
 
 function closeThresholdPopup() {
@@ -275,18 +284,35 @@ function saveThresholds() {
     const hum = parseFloat(document.getElementById('popupSeuilHumidity').value);
     const smoke = parseInt(document.getElementById('popupSeuilSmoke').value);
     const flame = parseInt(document.getElementById('popupSeuilFlame').value);
+    const phone = document.getElementById('popupPhoneNumber').value.trim();
+    
+    // Préparation des données à envoyer
+    const payload = { com: "upd_seuils", seuils: {} };
 
     if (!isNaN(temp)) datas.seuils.sT = temp;
     if (!isNaN(hum)) datas.seuils.sH = hum;
     if (!isNaN(smoke)) datas.seuils.sSm = smoke;
     if (!isNaN(flame)) datas.seuils.sF = flame;
 
-    showLoader("Envoi des nouveaux seuils...");
+    // Numéro seulement si modifié et valide
+    let phoneToSend = phone;
+    if (phone) {
+        if (!phone.startsWith('+')) phoneToSend = '+' + phone;
+        if (phoneToSend.length >= 10 && phoneToSend !== datas.tel) {
+            payload.tel = phoneToSend;   // ← on l'ajoute au même message !
+        }
+    }  
+
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ com: "upd_seuils", seuils: datas?.seuils }));
+        showLoader("Envoi des nouveaux seuils...");
+        ws.send(JSON.stringify(payload));
         isSendingCommand = true;
+    }else {
+        alert("Connexion perdue. Impossible d'envoyer.");
     }
+
+    
 }
 
 function sendManualCommand(override, state) {
@@ -328,3 +354,4 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshView();           // Affichage initial (valeurs à 0)
     connectWebSocket();      // ← Lancement de la première connexion !
 });
+
