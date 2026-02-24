@@ -15,6 +15,7 @@ let datas = {
         sH: null,
         sSm: null,
         sF: null,
+        tel: null,
     },
     his: [],
     nAlrt: null
@@ -273,21 +274,121 @@ function closeThresholdPopup() {
 }
 
 function saveThresholds() {
-    const temp = parseFloat(document.getElementById('popupSeuilTemp').value);
-    const hum = parseFloat(document.getElementById('popupSeuilHumidity').value);
-    const smoke = parseInt(document.getElementById('popupSeuilSmoke').value);
-    const flame = parseInt(document.getElementById('popupSeuilFlame').value);
+    // Récupération des valeurs
+    const tempInput = document.getElementById('popupSeuilTemp');
+    const humInput = document.getElementById('popupSeuilHumidity');
+    const smokeInput = document.getElementById('popupSeuilSmoke');
+    const flameInput = document.getElementById('popupSeuilFlame');
+    const telInput = document.getElementById('popupTel');
 
+    const temp = tempInput.value.trim() !== '' ? parseFloat(tempInput.value) : NaN;
+    const hum = humInput.value.trim() !== '' ? parseFloat(humInput.value) : NaN;
+    const smoke = smokeInput.value.trim() !== '' ? parseInt(smokeInput.value, 10) : NaN;
+    const flame = flameInput.value.trim() !== '' ? parseInt(flameInput.value, 10) : NaN;
+    const tel = telInput.value.trim();
+
+    // ───────────────────────────────────────────────
+    //              VALIDATIONS
+    // ───────────────────────────────────────────────
+    let hasError = false;
+    let errorMessages = [];
+
+    // Température
+    if (tempInput.required && (isNaN(temp) || temp < 0 || temp > 100)) {
+        hasError = true;
+        errorMessages.push("Température : entre 0 et 100 °C");
+        tempInput.classList.add('input-error');
+    } else {
+        tempInput.classList.remove('input-error');
+    }
+
+    // Humidité
+    if (humInput.required && (isNaN(hum) || hum < 0 || hum > 100)) {
+        hasError = true;
+        errorMessages.push("Humidité : entre 0 et 100 %");
+        humInput.classList.add('input-error');
+    } else {
+        humInput.classList.remove('input-error');
+    }
+
+    // Fumée / Gaz
+    if (smokeInput.required && (isNaN(smoke) || smoke < 0 || smoke > 5000)) {
+        hasError = true;
+        errorMessages.push("Fumée/Gaz : entre 0 et 5000 ppm");
+        smokeInput.classList.add('input-error');
+    } else {
+        smokeInput.classList.remove('input-error');
+    }
+
+    // Flamme (seuil bas = détection forte)
+    if (flameInput.required && (isNaN(flame) || flame < 0 || flame > 5000)) {
+        hasError = true;
+        errorMessages.push("Seuil flamme : entre 0 et 5000");
+        flameInput.classList.add('input-error');
+    } else {
+        flameInput.classList.remove('input-error');
+    }
+
+    // Téléphone camerounais → exactement 9 chiffres
+    const telClean = tel.replace(/\s+/g, ''); // enlève espaces
+    if (telInput.required) {
+        if (!/^[0-9]{9}$/.test(telClean)) {
+            hasError = true;
+            errorMessages.push("Numéro : exactement 9 chiffres (ex: 695680531)");
+            telInput.classList.add('input-error');
+        } else {
+            telInput.classList.remove('input-error');
+        }
+    } else {
+        telInput.classList.remove('input-error');
+    }
+
+    // ───────────────────────────────────────────────
+    //  Si erreur → on arrête + on affiche les messages
+    // ───────────────────────────────────────────────
+    if (hasError) {
+        // Option 1 : afficher dans une alerte simple (rapide)
+        alert("Veuillez corriger les erreurs suivantes :\n• " + errorMessages.join("\n• "));
+
+        // Option 2 (mieux) : créer un bloc d'erreur dans le popup (recommandé)
+        // Exemple :
+        // let errorDiv = document.getElementById('popup-errors');
+        // if (!errorDiv) {
+        //     errorDiv = document.createElement('div');
+        //     errorDiv.id = 'popup-errors';
+        //     errorDiv.className = 'error-messages';
+        //     document.querySelector('#thresholdPopup .popup-body').prepend(errorDiv);
+        // }
+        // errorDiv.innerHTML = errorMessages.map(msg => `<div>⚠️ ${msg}</div>`).join('');
+
+        return; // ← très important : on n'envoie rien
+    }
+
+    // ───────────────────────────────────────────────
+    //  Tout est valide → on met à jour l'objet
+    // ───────────────────────────────────────────────
     if (!isNaN(temp)) datas.seuils.sT = temp;
     if (!isNaN(hum)) datas.seuils.sH = hum;
     if (!isNaN(smoke)) datas.seuils.sSm = smoke;
     if (!isNaN(flame)) datas.seuils.sF = flame;
 
-    showLoader("Envoi des nouveaux seuils...");
+    // On stocke le numéro nettoyé (sans espaces)
+    if (telClean) {
+        datas.seuils.tel = telClean;
+    }
+
+    // Feedback visuel + envoi
+    showLoader("Modification en cours...");
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ com: "upd_seuils", seuils: datas.seuils }));
+        ws.send(JSON.stringify({
+            com: "upd_conf",
+            seuils: datas.seuils
+        }));
         isSendingCommand = true;
+    } else {
+        alert("Connexion au serveur perdue.\nLes modifications n'ont pas pu être envoyées.");
+        hideLoader();
     }
 }
 

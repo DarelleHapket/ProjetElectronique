@@ -110,10 +110,14 @@
                                 <span class="threshold-display-label">Flame :</span>
                                 <span class="threshold-display-value" id="display-flame">--- </span>
                             </div>
+                            <div class="threshold-display">
+                                <span class="threshold-display-label">Numero d'urgence :</span>
+                                <span class="threshold-display-value" id="display-tel">--- </span>
+                            </div>
                         </div>
 
                         <button class="btn btn-primary" onclick="openThresholdPopup()">
-                            Modifier les seuils
+                            Modifier
                         </button>
                     </div>
                 </div>
@@ -254,7 +258,7 @@
     <div id="thresholdPopup" class="popup" style="display:none;">
         <div class="popup-content">
             <div class="popup-header">
-                <h2>Configurer les Seuils d'Alerte</h2>
+                <h2>Configuration</h2>
                 <button class="close-btn" onclick="closeThresholdPopup()">×</button>
             </div>
 
@@ -262,7 +266,7 @@
                 <div class="form-group">
                     <label>🌡️ Température maximale</label>
                     <div class="input-group">
-                        <input type="number" id="popupSeuilTemp" step="0.5" min="0" max="100">
+                        <input type="number" id="popupSeuilTemp" step="0.5" min="0" max="100" required>
                         <span class="unit">°C</span>
                     </div>
                 </div>
@@ -270,7 +274,7 @@
                 <div class="form-group">
                     <label>💧 Humidité maximale</label>
                     <div class="input-group">
-                        <input type="number" id="popupSeuilHumidity" min="0" max="100">
+                        <input type="number" id="popupSeuilHumidity" min="0" max="100" required>
                         <span class="unit">%</span>
                     </div>
                 </div>
@@ -278,19 +282,36 @@
                 <div class="form-group">
                     <label>💨 Fumée / Gaz (ppm)</label>
                     <div class="input-group">
-                        <input type="number" id="popupSeuilSmoke" min="0" max="5000">
+                        <input type="number" id="popupSeuilSmoke" min="0" max="5000" required>
                         <span class="unit">ppm</span>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>🔥 Détection Flamme </label>
                     <div class="input-group">
-                        <input type="number" id="popupSeuilFlame" min="0" max="5000">
-                        <span class="unit"> </span>
+                        <input type="number" id="popupSeuilFlame" min="0" max="5000" required>
+                        <!-- <span class="unit"> </span> -->
                     </div>
                     <small class="field-help">
                         Plus la valeur est basse → flamme plus intense/proche.<br>
                         Typique : 2000-2500 en air normal. </small>
+                </div>
+
+                <div class="form-group">
+                    <label>📞 Numéro d'urgence</label>
+                    <div class="input-group">
+                        <span class="unit fixed">
+                            <img src="images/flag/cm.png" alt="Drapeau Cameroun" width="24"
+                                height="16" style="vertical-align: middle; margin-right: 4px;">
+                            +237
+                        </span>
+                        <input type="tel" id="popupTel" placeholder="695 680 531" pattern="[0-9]{9}" minlength="9"
+                            maxlength="9" title="Entrez un numéro camerounais de 9 chiffres (sans le +237)" required>
+                    </div>
+                    <small class="field-help">
+                        Numéro camerounais à 9 chiffres (exemple : 695680531).<br>
+                        Ce numéro recevra un SMS et/ou un appel en cas d'alerte.
+                    </small>
                 </div>
             </div>
 
@@ -302,12 +323,12 @@
     </div>
 
     <!-- Loader global -->
-    <div id="global-loader" class="loader-overlay">
+    <!-- <div id="global-loader" class="loader-overlay">
         <div class="loader-content">
             <div class="spinner"></div>
             <p id="loader-text">Chargement en cours...</p>
         </div>
-    </div>
+    </div> -->
 </body>
 
 </html>
