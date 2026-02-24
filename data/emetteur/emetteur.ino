@@ -51,6 +51,25 @@
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 
+// ─────────────────────────────────────────────
+// Variables globales pour l’alerte GSM asynchrone
+// ─────────────────────────────────────────────
+enum GSMAlertState {
+  GSM_IDLE,
+  GSM_NEED_SEND_SMS,
+  GSM_NEED_START_CALL,
+  GSM_CALL_IN_PROGRESS,
+  GSM_NEED_HANGUP,
+  GSM_FINISHED
+};
+
+GSMAlertState gsmAlertState = GSM_IDLE;
+unsigned long gsmAlertTimer   = 0;
+String        pendingAlertMsg = "";
+
+const unsigned long CALL_DURATION_MS = 10000;   
+
+
 // Variables pour l'heure réelle GSM
 bool gsmTimeInitialized = false;
 unsigned long gsmTimeOffset = 0;
@@ -83,9 +102,6 @@ bool overrideActive = false;
 unsigned long timeReference = 0;
 bool timeReferenceSet = false;
 
-bool gsmCalling = false;
-unsigned long gsmCallStart = 0;
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  Objets globaux
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,12 +130,13 @@ JsonArray history;
 
 JsonObject newAlerte;
 bool hasNewAlerte = false;
-bool isFlame  = false;
 
 // Détection nouvelle alerte
 bool prevAlert = false;
 
 bool receiveCommand = false;
+
+TaskHandle_t GSMTTaskHandle = NULL;
 
 // ─────────────────────────────────────────────
 // Alerte
@@ -129,6 +146,8 @@ void updateActuators(bool alert) {
   digitalWrite(LED_V_PIN, alert ? LOW : HIGH);
   digitalWrite(BUZZER_PIN, alert ? HIGH : LOW);
 }
+
+
 
 // -----------------------------------------------------------------------------
 // Fonctions pour les alertes gsm
@@ -177,30 +196,119 @@ void sendAlertGSM(const String &message) {
   Serial.println("[GSM] Appel terminé (ATH envoyé)");
 }*/
 
-void sendAlertGSM(const String &message) {
-
-  if (!modem.isNetworkConnected()) {
-    Serial.println("[GSM] Réseau non connecté → abandon alerte GSM");
+void startAsyncAlert(const String &message) {
+  if (gsmAlertState != GSM_IDLE) {
+    Serial.println("[GSM] Alerte déjà en cours → ignorée");
     return;
   }
 
-  // SMS
-  if (modem.sendSMS(SMS_TARGET, message)) {
-    Serial.println("→ SMS envoyé OK");
-  } else {
-    Serial.println("→ ÉCHEC envoi SMS");
+  if (!modem.isNetworkConnected()) {
+    Serial.println("[GSM] Pas de réseau → alerte abandonnée");
+    return;
   }
 
-  // Lancer appel
-  SerialAT.print("ATD");
-  SerialAT.print(CALL_TARGET);
-  SerialAT.println(";");
-
-  gsmCalling = true;
-  gsmCallStart = millis();
-
-  Serial.println("[GSM] Appel lancé (non bloquant)");
+  pendingAlertMsg = message;
+  gsmAlertState = GSM_NEED_SEND_SMS;
+ // gsmAlertTimer = millis();
+  Serial.println("[GSM] Demande alerte → SMS + appel programmés");
 }
+
+void GSMTask(void *pvParameters) {
+  Serial.println("[GSM Task] Tâche GSM démarrée");
+  for (;;) {
+    static unsigned long alerteStart = 0;
+    if (gsmAlertState != GSM_IDLE && alerteStart == 0) {
+      alerteStart = millis();
+    }
+    if (gsmAlertState != GSM_IDLE && millis() - alerteStart > 45000UL) {  // 45 s max
+      Serial.println("[GSM Task] Alerte trop longue (>45s) → reset forcé");
+      SerialAT.println("ATH");
+      gsmAlertState = GSM_IDLE;
+      alerteStart = 0;
+    }
+
+    switch (gsmAlertState) {
+
+      case GSM_NEED_SEND_SMS:{
+        Serial.print("[GSM Task] Envoi SMS → ");
+        Serial.println(pendingAlertMsg);
+
+        bool smsOk = modem.sendSMS(SMS_TARGET, pendingAlertMsg);
+        Serial.println(smsOk ? "→ OK" : "→ ÉCHEC");
+
+        gsmAlertState = GSM_NEED_START_CALL;
+        break;
+      }
+      case GSM_NEED_START_CALL:{
+        Serial.print("[GSM Task] Lancement appel vers ");
+        Serial.print(CALL_TARGET);
+        Serial.println(" ...");
+
+        SerialAT.print("ATD");
+        SerialAT.print(CALL_TARGET);
+        SerialAT.println(";");
+
+        gsmAlertState      = GSM_CALL_IN_PROGRESS;
+        gsmAlertTimer      = millis();  // on démarre le timer d'appel ici
+        break;
+      }
+      case GSM_CALL_IN_PROGRESS:{
+        if (millis() - gsmAlertTimer >= CALL_DURATION_MS) {
+          Serial.println("[GSM Task] Durée appel écoulée → raccrochage");
+          SerialAT.println("ATH");
+          gsmAlertState = GSM_NEED_HANGUP;
+          gsmAlertTimer = millis();
+          break;
+        }
+
+        // Lecture réponses en temps réel
+        while (SerialAT.available()) {
+          String line = SerialAT.readStringUntil('\n');
+          line.trim();
+          if (line.length() > 0) Serial.println("[GSM Task] → " + line);
+
+          if (line.indexOf("NO CARRIER") >= 0 ||
+              line.indexOf("BUSY")       >= 0 ||
+              line.indexOf("NO ANSWER")  >= 0 ||
+              line.indexOf("ERROR")      >= 0) {
+            Serial.println("[GSM Task] Appel terminé prématurément");
+            SerialAT.println("ATH");
+            gsmAlertState = GSM_NEED_HANGUP;
+            gsmAlertTimer = millis();
+            break;
+          }
+        }
+        break;
+      }
+      case GSM_NEED_HANGUP:{
+        // Sécurité : attendre un peu que ATH soit traité
+        if (millis() - gsmAlertTimer > 1500) {
+          Serial.println("[GSM Task] Alerte terminée");
+          gsmAlertState   = GSM_FINISHED;
+          pendingAlertMsg = "";
+        }
+        break;
+      }
+      case GSM_FINISHED:{
+        Serial.println("[GSM Task] Alerte GSM terminée avec succès");
+        gsmAlertState = GSM_IDLE;
+        break;
+      }
+      case GSM_IDLE:{
+          // rien à faire
+          break;
+      }
+      default:{
+        Serial.println("[GSM Task] État invalide : " + String(gsmAlertState) + " → reset");
+        gsmAlertState = GSM_IDLE;
+        break;
+      }  
+    }
+
+    vTaskDelay(80 / portTICK_PERIOD_MS);  // ~12 fois par seconde
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fonctions de gestion des seuils persistants
@@ -244,7 +352,6 @@ void saveSettings() {
 
   serializeJson(doc, file);
   file.close();
-  debugHistoryFile();
   Serial.println("Seuils sauvegardés dans settings.json");
 }
 
@@ -301,11 +408,6 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
       (lastFlame <= seuilFlame));
 
     client->text(jsonStr);
-
-    Serial.println("Envoi historique complet au client");
-    serializeJson(historyDoc, Serial);
-    Serial.println();
-    
   } else if (type == WS_EVT_DATA) {
     // Gestion des commandes (upd_seuils, mnl_vent)
     String message;
@@ -414,32 +516,6 @@ String getFormatedTime() {
   return String(buf);
 }
 
-//TESTS
-void debugHistoryFile() {
-  Serial.println("---- DEBUG HISTORY ----");
-
-  if (!LittleFS.exists("/db/history.json")) {
-    Serial.println("❌ history.json n'existe PAS");
-    return;
-  }
-
-  File file = LittleFS.open("/db/history.json", "r");
-  if (!file) {
-    Serial.println("❌ Impossible d'ouvrir history.json");
-    return;
-  }
-
-  Serial.println("✅ history.json existe. Contenu :");
-
-  while (file.available()) {
-    Serial.write(file.read());
-  }
-
-  file.close();
-  Serial.println("\n---- FIN DEBUG ----");
-}
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  SETUP
 // ─────────────────────────────────────────────────────────────────────────────
@@ -541,6 +617,16 @@ Serial.println("AP démarré sur canal 6 fixe");
   SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
   delay(1800);
 
+  xTaskCreatePinnedToCore(
+    GSMTask, "GSMTask", 4608, NULL, 1, &GSMTTaskHandle, 1  // core 1
+  );
+
+  if (GSMTTaskHandle == NULL) {
+    Serial.println("ERREUR : Impossible de créer la tâche GSM !");
+  } else {
+    Serial.println("Tâche GSM créée sur core 1");
+  }
+
   if (!modem.restart()) {
     Serial.println("→ modem.restart() échoué !");
   } else {
@@ -615,16 +701,19 @@ Serial.println("AP démarré sur canal 6 fixe");
 // ─────────────────────────────────────────────────────────────────────────────
 
 void loop() {
+
+ // handleGSMAlertAsync();
+
   // Lecture capteurs
   float t1 = dht1.readTemperature();
   float h1 = dht1.readHumidity();
-  // float t2 = dht2.readTemperature();
-  // float h2 = dht2.readHumidity();
-
-  // float temp_moy = (isnan(t1) ? t2 : isnan(t2) ? t1 : (t1 + t2) / 2.0);
+  // float t2 = dht2.readTemperature();t1 : (t1 + t2) / 2.0);
   // float hum_moy  = (isnan(h1) ? h2 : isnan(h2) ? h1 : (h1 + h2) / 2.0);
   float temp_moy = t1;
   float hum_moy = h1;
+  // float h2 = dht2.readHumidity();
+
+  // float temp_moy = (isnan(t1) ? t2 : isnan(t2) ? 
   int smoke = analogRead(MQ2_PIN);
   int flame = analogRead(FLAME_PIN);
 
@@ -647,8 +736,17 @@ void loop() {
   }
   digitalWrite(RELAY_PIN, relayState);
 
+  if (gsmAlertState != GSM_IDLE && gsmAlertState != GSM_FINISHED) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("ENVOI ALERTE...");
+  lcd.setCursor(0, 1);
+  lcd.print("Patientez SVP");
+  // ne pas faire d'autres prints ici
+} else {
   //   Affichage LCD
   lcd.clear();
+  delay(3);
   lcd.setCursor(0, 0);
   lcd.print(alerte ? "!! ALERTE !!" : "Etat: NORMAL");
   lcd.setCursor(0, 1);
@@ -665,7 +763,7 @@ void loop() {
     lcd.print(" FL:");
     lcd.print(flame);
   }
-
+}
   lastTemp = temp_moy;
   lastHum = hum_moy;
   lastSmoke = smoke;
@@ -674,6 +772,10 @@ void loop() {
 
   // Enregistrement nouvelle alerte (uniquement au déclenchement)
   if (alerte && !prevAlert) {
+    delay(50);
+    lcd.init();                 // réinitialise le LCD
+    lcd.backlight();
+    delay(50);
     if (history.size() >= 50) {
       history.remove(0);
     }
@@ -702,7 +804,6 @@ void loop() {
       obj["var"] = "F";
       obj["val"] = flame;
       hasNewAlerte = true;
-      isFlame = true;
     }
 
     // Sauvegarde sur disque seulement si une alerte a été ajoutée
@@ -723,25 +824,12 @@ void loop() {
     if (smokeAlert) alertMsg += "Détection fumée: " + String(smoke) + "\n";
     if (flameAlert) alertMsg += "Détection flamme !\n";
 
-    if(isFlame){
-      sendAlertGSM(alertMsg);
-      
-    }
-
+    //sendAlertGSM(alertMsg);
+    startAsyncAlert(alertMsg);
   } else if (!alerte && prevAlert) {
     // Plus d'alerte → on réinitialise newAlerte
     hasNewAlerte = false;
     // newAlerte reste valide mais on sait qu'il n'y en a plus de nouvelle
-    isFlame = false;  // Réinitialiser le flag après envoi
-  }
-
-  // Gestion appel GSM non bloquant
-  if (gsmCalling) {
-    if (millis() - gsmCallStart >= 20000UL) {
-        SerialAT.println("ATH");
-        Serial.println("[GSM] Appel terminé (20s écoulées)");
-        gsmCalling = false;
-    }
   }
   prevAlert = alerte;
 
