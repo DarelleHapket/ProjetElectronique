@@ -19,7 +19,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 #define DHT_1_PIN 4
-#define DHT_2_PIN 15
 #define DHT_TYPE DHT22
 #define MQ2_PIN 34
 #define RELAY_PIN 17
@@ -44,14 +43,22 @@
 #define MODEM_TX 15
 // Configuration – À CHANGER
 #define APN ""
-char *SMS_TARGET "+237699974400";
-char *CALL_TARGET "+237699974400";
+const char *SMS_TARGET = "+237699974400";
+const char *CALL_TARGET = "+237699974400";
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 
 // Variables pour l'heure réelle GSM
 bool gsmTimeInitialized = false;
 unsigned long gsmTimeOffset = 0;
+enum GSMState { IDLE,
+                SENDING_SMS,
+                MAKING_CALL,
+                CALL_ACTIVE,
+                HANGUP };
+GSMState gsmState = IDLE;
+unsigned long gsmTimer = 0;
+String pendingAlertMessage = "";
 
 // WiFi Access Point
 const char *ap_ssid = "Module emetteur";
@@ -61,6 +68,7 @@ IPAddress ap_ip(192, 168, 4, 1);
 // WiFi Station (pour NTP)
 const char *sta_ssid = "VOTRE_SSID";
 const char *sta_password = "VOTRE_PASSWORD";
+bool connectToWiFi = false;
 
 // Seuils par défaut
 float TEMP_SEUIL_DEFAULT = 35.0;
@@ -86,7 +94,6 @@ bool timeReferenceSet = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 DHT dht1(DHT_1_PIN, DHT_TYPE);
-// DHT dht2(DHT_2_PIN, DHT_TYPE);
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -118,8 +125,7 @@ bool receiveCommand = false;
 // ─────────────────────────────────────────────
 // Alerte
 // ─────────────────────────────────────────────
-void updateActuators(bool alert)
-{
+void updateActuators(bool alert) {
   digitalWrite(LED_R_PIN, alert ? HIGH : LOW);
   digitalWrite(LED_V_PIN, alert ? LOW : HIGH);
   digitalWrite(BUZZER_PIN, alert ? HIGH : LOW);
@@ -128,78 +134,77 @@ void updateActuators(bool alert)
 // -----------------------------------------------------------------------------
 // Fonctions pour les alertes gsm
 // -----------------------------------------------------------------------------
-void sendAlertGSM(const String &message)
-{
-
-  if (!modem.isNetworkConnected())
-  {
-    Serial.println("[GSM] Réseau non connecté → abandon alerte GSM");
-    return;
-  }
-
-  // 1. Envoi SMS
-  Serial.print("[GSM] Envoi SMS → ");
-  Serial.println(message);
-
-  if (modem.sendSMS(SMS_TARGET, message))
-  {
-    Serial.println("→ SMS envoyé OK");
-  }
-  else
-  {
-    Serial.println("→ ÉCHEC envoi SMS");
-  }
-
-  // 2. Appel sortant (sonne ~20 secondes puis raccroche)
-  Serial.print("[GSM] Appel sortant vers ");
-  Serial.print(CALL_TARGET);
-  Serial.println(" ...");
-
-  SerialAT.print("ATD");
-  SerialAT.print(CALL_TARGET);
-  SerialAT.println(";");
-
-  // On laisse sonner ~20 secondes
-  unsigned long debutAppel = millis();
-  while (millis() - debutAppel < 20000UL)
-  {
-    if (SerialAT.available())
-    {
-      String ligne = SerialAT.readStringUntil('\n');
-      Serial.println("[GSM] → " + ligne);
-      if (ligne.indexOf("NO CARRIER") >= 0 || ligne.indexOf("BUSY") >= 0)
-      {
-        break;
+void handleGSMNonBlocking() {
+  switch (gsmState) {
+    case IDLE:
+      if (pendingAlertMessage != "") {
+        if (!modem.isNetworkConnected()) {
+          Serial.println("[GSM] Pas de réseau → alerte abandonnée");
+          pendingAlertMessage = "";
+          break;
+        }
+        Serial.println("[GSM] Envoi SMS...");
+        if (modem.sendSMS(SMS_TARGET, pendingAlertMessage)) {
+          Serial.println("→ SMS OK");
+        } else {
+          Serial.println("→ Échec SMS");
+        }
+        gsmState = MAKING_CALL;
+        gsmTimer = millis();
       }
-    }
-    delay(100);
-  }
+      break;
 
-  // Raccrocher dans tous les cas
-  SerialAT.println("ATH");
-  Serial.println("[GSM] Appel terminé (ATH envoyé)");
+    case MAKING_CALL:
+      Serial.print("[GSM] Appel vers ");
+      Serial.println(CALL_TARGET);
+      SerialAT.print("ATD");
+      SerialAT.print(CALL_TARGET);
+      SerialAT.println(";");
+      gsmState = CALL_ACTIVE;
+      gsmTimer = millis();
+      break;
+
+    case CALL_ACTIVE:
+      if (millis() - gsmTimer >= 15000UL) {  // 15 secondes max de sonnerie
+        SerialAT.println("ATH");             // raccrocher
+        Serial.println("[GSM] Appel terminé (ATH)");
+        gsmState = IDLE;
+        pendingAlertMessage = "";
+      }
+      // Optionnel : lire les réponses pour détecter NO CARRIER / BUSY plus tôt
+      while (SerialAT.available()) {
+        String line = SerialAT.readStringUntil('\n');
+        if (line.indexOf("NO CARRIER") >= 0 || line.indexOf("BUSY") >= 0) {
+          SerialAT.println("ATH");
+          gsmState = IDLE;
+          pendingAlertMessage = "";
+          break;
+        }
+      }
+      break;
+
+    default:
+      gsmState = IDLE;
+      break;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fonctions de gestion des seuils persistants
 // ─────────────────────────────────────────────────────────────────────────────
 
-void loadSettings()
-{
-  if (!LittleFS.exists("/db/settings.json"))
-    return;
+void loadSettings() {
+  if (!LittleFS.exists("/db/settings.json")) return;
 
   File file = LittleFS.open("/db/settings.json", "r");
-  if (!file)
-    return;
+  if (!file) return;
 
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<512> doc;  // un peu plus grand pour être tranquille
   DeserializationError error = deserializeJson(doc, file);
   file.close();
 
-  if (error)
-  {
-    Serial.println("Erreur lecture settings.json : " + String(error.c_str()));
+  if (error) {
+    Serial.println("Erreur JSON settings : " + String(error.c_str()));
     return;
   }
 
@@ -207,43 +212,39 @@ void loadSettings()
   humSeuil = doc["sH"] | HUM_SEUIL_DEFAULT;
   smokeSeuil = doc["sSm"] | SMOKE_SEUIL_DEFAULT;
   seuilFlame = doc["sF"] | FLAME_SEUIL_DEFAULT;
-  CALL_TARGET = doc["sF"] | FLAME_SEUIL_DEFAULT;
+
+  // Clés différentes pour SMS et appel
   SMS_TARGET = doc["tel"] | SMS_TARGET;
   CALL_TARGET = doc["tel"] | CALL_TARGET;
 }
 
-void saveSettings()
-{
-  StaticJsonDocument<256> doc;
+void saveSettings() {
+  StaticJsonDocument<512> doc;
   doc["sT"] = tempSeuil;
   doc["sH"] = humSeuil;
   doc["sSm"] = smokeSeuil;
   doc["sF"] = seuilFlame;
-  doc["tel"] = seuilFlame;
+  doc["tel"] = SMS_TARGET;
+  // doc["tel"] = CALL_TARGET;
 
   File file = LittleFS.open("/db/settings.json", "w");
-  if (!file)
-  {
-    Serial.println("Erreur ouverture settings.json en écriture");
+  if (!file) {
+    Serial.println("Erreur écriture settings.json");
     return;
   }
-
   serializeJson(doc, file);
   file.close();
-  Serial.println("Seuils sauvegardés dans settings.json");
+  Serial.println("Paramètres sauvegardés");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fonction partagée pour gérer les commandes (depuis WS ou LoRa)
 // ─────────────────────────────────────────────────────────────────────────────
 
-void handleCommand(const JsonDocument &doc)
-{
-  if (doc["com"] == "upd_conf")
-  {
+void handleCommand(const JsonDocument &doc) {
+  if (doc["com"] == "upd_conf") {
     JsonVariantConst v = doc["seuils"];
-    if (!v.isNull() && v.is<JsonObjectConst>())
-    {
+    if (!v.isNull() && v.is<JsonObjectConst>()) {
       JsonObjectConst seuils = v.as<JsonObjectConst>();
 
       tempSeuil = seuils["sT"] | tempSeuil;
@@ -256,8 +257,7 @@ void handleCommand(const JsonDocument &doc)
     }
   }
 
-  if (doc["com"] == "mnl_vent")
-  {
+  if (doc["com"] == "mnl_vent") {
     overrideActive = doc["override"] | false;
     manualVentil = doc["state"] | false;
   }
@@ -269,33 +269,29 @@ void handleCommand(const JsonDocument &doc)
 // ─────────────────────────────────────────────────────────────────────────────
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
-               AwsEventType type, void *arg, uint8_t *data, size_t len)
-{
+               AwsEventType type, void *arg, uint8_t *data, size_t len) {
 
-  if (type == WS_EVT_CONNECT)
-  {
+  if (type == WS_EVT_CONNECT) {
     Serial.printf("Client connecté #%u\n", client->id());
     uint32_t nombreClients = ws.count();
     Serial.printf("Nombre de clients connectés : %u\n", nombreClients);
-    if (!timeReferenceSet)
-    {
+    if (!timeReferenceSet) {
       timeReference = millis();
       timeReferenceSet = true;
       Serial.println("Référence temporelle définie (premier client connecté)");
     }
 
     String jsonStr = buildStatusJson(
-        true,
-        lastTemp, lastHum, lastSmoke, lastFlame, lastAlert,
-        (lastTemp >= tempSeuil),
-        (lastHum >= humSeuil),
-        (lastSmoke >= smokeSeuil),
-        (lastFlame <= seuilFlame));
+      true,
+      lastTemp, lastHum, lastSmoke, lastFlame, lastAlert,
+      (lastTemp >= tempSeuil),
+      (lastHum >= humSeuil),
+      (lastSmoke >= smokeSeuil),
+      (lastFlame <= seuilFlame));
+
 
     client->text(jsonStr);
-  }
-  else if (type == WS_EVT_DATA)
-  {
+  } else if (type == WS_EVT_DATA) {
     // Gestion des commandes (upd_conf, mnl_vent)
     String message;
     for (size_t i = 0; i < len; i++)
@@ -304,8 +300,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, message);
 
-    if (error)
-    {
+    if (error) {
       Serial.println("Erreur JSON WebSocket : " + String(error.c_str()));
       return;
     }
@@ -319,16 +314,10 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
 // ─────────────────────────────────────────────────────────────────────────────
 
 String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, int flame, bool isAlert,
-                       bool tempAlert, bool humAlert, bool smokeAlert, bool flameAlert)
-{
+                       bool tempAlert, bool humAlert, bool smokeAlert, bool flameAlert) {
 
-  // Taille dynamique : plus grande si on inclut l'historique complet
-  size_t capacity = JSON_OBJECT_SIZE(10) + JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(4);
-  if (withAllHistory)
-  {
-    capacity += historyDoc.memoryUsage(); // Estimation sûre de l'historique
-  }
-  capacity += 128;
+  size_t capacity = JSON_OBJECT_SIZE(14) + JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(5);
+  if (withAllHistory) capacity += historyDoc.memoryUsage() + 256;
 
   DynamicJsonDocument doc(capacity);
 
@@ -336,19 +325,16 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
   doc["isRC"] = receiveCommand;
 
   JsonArray types = doc.createNestedArray("alertType");
-  if (tempAlert)
-    types.add("T");
-  if (humAlert)
-    types.add("H");
-  if (smokeAlert)
-    types.add("S");
-  if (flameAlert)
-    types.add("F");
+  if (tempAlert) types.add("T");
+  if (humAlert) types.add("H");
+  if (smokeAlert) types.add("S");
+  if (flameAlert) types.add("F");
 
   doc["temp"] = temp;
   doc["hum"] = hum;
   doc["sm"] = smoke;
   doc["fl"] = flame;
+
   doc["mnlOvrr"] = overrideActive;
   doc["mnlVent"] = manualVentil;
 
@@ -357,22 +343,17 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
   seuils["sH"] = humSeuil;
   seuils["sSm"] = smokeSeuil;
   seuils["sF"] = seuilFlame;
+  seuils["tel"] = SMS_TARGET ? SMS_TARGET : "";
 
-  // Ajout conditionnel de l'historique complet
-  if (withAllHistory)
-  {
+  if (withAllHistory) {
     doc["his"] = history;
   }
 
-  // Ajout de la nouvelle alerte (toujours présent, peut être null)
-  if (hasNewAlerte && !newAlerte.isNull())
-  {
+  if (hasNewAlerte && !newAlerte.isNull()) {
     doc["nAlrt"] = newAlerte;
     hasNewAlerte = false;
     newAlerte = JsonObject();
-  }
-  else
-  {
+  } else {
     doc["nAlrt"] = nullptr;
   }
 
@@ -381,10 +362,8 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
   return jsonStr;
 }
 
-String getFormatedTime()
-{
-  if (gsmTimeInitialized)
-  {
+String getFormatedTime() {
+  if (gsmTimeInitialized) {
     unsigned long now_ms = millis() + gsmTimeOffset;
     time_t now = now_ms / 1000;
 
@@ -419,8 +398,7 @@ String getFormatedTime()
 //  SETUP
 // ─────────────────────────────────────────────────────────────────────────────
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
   delay(1000);
 
@@ -432,7 +410,6 @@ void setup()
   digitalWrite(LED_V_PIN, HIGH);
 
   dht1.begin();
-  // dht2.begin();
 
   Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
   lcd.init();
@@ -440,8 +417,7 @@ void setup()
   lcd.print("Demarrage...");
 
   // LittleFS
-  if (!LittleFS.begin(true))
-  {
+  if (!LittleFS.begin(true)) {
     Serial.println("Erreur LittleFS → formatage");
     lcd.clear();
     lcd.print("Formatage FS...");
@@ -449,67 +425,67 @@ void setup()
     ESP.restart();
   }
 
-  loadSettings(); // Charger les seuils persistants
+  loadSettings();  // Charger les seuils persistants
 
   // Chargement historique des alertes
-  if (LittleFS.exists("/db/history.json"))
-  {
-    File file = LittleFS.open("/db/history.json", "r");
-    if (file)
-    {
-      DeserializationError error = deserializeJson(historyDoc, file);
-      if (!error)
-      {
-        history = historyDoc.as<JsonArray>();
-      }
-      else
-      {
-        Serial.println("Erreur lecture history.json");
-      }
-      file.close();
+  if (LittleFS.exists("/db/history.json")) {
+    File f = LittleFS.open("/db/history.json", "r");
+    if (f) {
+      deserializeJson(historyDoc, f);
+      history = historyDoc.as<JsonArray>();
+      f.close();
     }
-  }
-  else
-  {
+  } else {
     history = historyDoc.to<JsonArray>();
   }
 
   // WiFi AP + Station (pour NTP)
-  WiFi.mode(WIFI_AP_STA);
+  if (connectToWiFi) {
+    WiFi.mode(WIFI_AP_STA);
+  } else {
+    WiFi.mode(WIFI_AP);
+    Serial.println("Mode AP PUR activé (meilleure stabilité hotspot)");
+  }
   WiFi.setSleep(false);
 
   // Connexion WiFi Station (NTP)
-  WiFi.begin(sta_ssid, sta_password);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20)
-  {
-    delay(500);
-    Serial.print(".");
-    attempts++;
+  if (connectToWiFi) {
+    Serial.println("Tentative de connexion WiFi STA...");
+    WiFi.begin(sta_ssid, sta_password);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConnecté au WiFi !");
+      Serial.print("IP STA : ");
+      Serial.println(WiFi.localIP());
+
+      // Optionnel : NTP seulement si connecté
+      timeClient.begin();
+    } else {
+      Serial.println("\nÉchec connexion WiFi STA → on continue en AP seul");
+    }
+  } else {
+    Serial.println("Mode AP seul (pas de connexion routeur)");
   }
 
   // Démarrage AP
+  WiFi.mode(WIFI_AP);
+  WiFi.setSleep(false);
   WiFi.softAPConfig(ap_ip, ap_ip, IPAddress(255, 255, 255, 0));
-  WiFi.softAP(ap_ssid, ap_password, 6, 0);
-  Serial.println("AP démarré sur canal 6 fixe");
-  if (WiFi.softAP(ap_ssid, ap_password))
-  {
-    Serial.println("Point d'accès démarré");
-    Serial.printf("SSID: %s  -  Mot de passe: %s  -  IP: %s\n",
-                  ap_ssid, ap_password, WiFi.softAPIP().toString().c_str());
-  }
-  else
-  {
-    Serial.println("Échec démarrage AP");
-  }
-
+  WiFi.softAP(ap_ssid, ap_password, 1, 0);
+  Serial.printf("AP démarré → %s / %s  IP:%s\n", ap_ssid, ap_password, WiFi.softAPIP().toString().c_str());
   delay(1500);
 
   // LoRa
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
   LoRa.setPins(LORA_CS, LORA_RST, LORA_DIO0);
-  if (!LoRa.begin(433E6))
-  {
+  if (!LoRa.begin(433E6)) {
     Serial.println("Erreur démarrage LoRa !");
     lcd.clear();
     lcd.print("Erreur LoRa");
@@ -530,24 +506,18 @@ void setup()
   SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
   delay(1800);
 
-  if (!modem.restart())
-  {
+  if (!modem.restart()) {
     Serial.println("→ modem.restart() échoué !");
-  }
-  else
-  {
+  } else {
     Serial.println("→ modem redémarré");
   }
 
   delay(2000);
 
   // Attente réseau (max 60s)
-  if (!modem.waitForNetwork(60000L))
-  {
+  if (!modem.waitForNetwork(60000L)) {
     Serial.println("→ Pas de réseau GSM après 60s");
-  }
-  else
-  {
+  } else {
     Serial.println("→ Réseau GSM OK");
     Serial.println("Opérateur : " + modem.getOperator());
 
@@ -556,35 +526,29 @@ void setup()
     int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
     float timezone = 0.0;
 
-    if (modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &timezone))
-    {
+    if (modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &timezone)) {
       Serial.printf("→ Heure réseau : %02d/%02d/%02d  %02d:%02d:%02d  (fuseau %.1f h)\n",
                     year, month, day, hour, minute, second, timezone);
 
-      struct tm timeinfo = {0};
-      timeinfo.tm_year = year + 2000 - 1900; // années depuis 1900
-      timeinfo.tm_mon = month - 1;           // 0 = janvier
+      struct tm timeinfo = { 0 };
+      timeinfo.tm_year = year + 2000 - 1900;  // années depuis 1900
+      timeinfo.tm_mon = month - 1;            // 0 = janvier
       timeinfo.tm_mday = day;
       timeinfo.tm_hour = hour;
       timeinfo.tm_min = minute;
       timeinfo.tm_sec = second;
 
       time_t rawtime = mktime(&timeinfo);
-      if (rawtime != -1)
-      {
+      if (rawtime != -1) {
         // Ajustement fuseau horaire (timezone est en heures)
         rawtime += (long)(timezone * 3600);
         gsmTimeOffset = (unsigned long)rawtime * 1000UL - millis();
         gsmTimeInitialized = true;
         Serial.println("→ Heure GSM synchronisée avec succès");
-      }
-      else
-      {
+      } else {
         Serial.println("→ Échec de mktime()");
       }
-    }
-    else
-    {
+    } else {
       Serial.println("→ Échec de getNetworkTime()");
     }
   }
@@ -615,16 +579,10 @@ void setup()
 //  LOOP
 // ─────────────────────────────────────────────────────────────────────────────
 
-void loop()
-{
+void loop() {
   // Lecture capteurs
   float t1 = dht1.readTemperature();
   float h1 = dht1.readHumidity();
-  // float t2 = dht2.readTemperature();
-  // float h2 = dht2.readHumidity();
-
-  // float temp_moy = (isnan(t1) ? t2 : isnan(t2) ? t1 : (t1 + t2) / 2.0);
-  // float hum_moy  = (isnan(h1) ? h2 : isnan(h2) ? h1 : (h1 + h2) / 2.0);
   float temp_moy = t1;
   float hum_moy = h1;
   int smoke = analogRead(MQ2_PIN);
@@ -642,12 +600,9 @@ void loop()
 
   // Actionneurs
   updateActuators(alerte);
-  if (overrideActive)
-  {
+  if (overrideActive) {
     relayState = manualVentil;
-  }
-  else
-  {
+  } else {
     relayState = ventil;
   }
   digitalWrite(RELAY_PIN, relayState);
@@ -662,17 +617,16 @@ void loop()
 
   lcd.print(" H:");
   lcd.print(hum_moy, 1);
-  if (flameAlert)
-  {
+  if (flameAlert) {
     lcd.print(" FLAMME!   ");
-  }
-  else
-  {
+  } else {
     lcd.print(" G:");
     lcd.print(smoke);
     lcd.print(" FL:");
     lcd.print(flame);
   }
+
+  handleGSMNonBlocking();
 
   lastTemp = temp_moy;
   lastHum = hum_moy;
@@ -681,10 +635,8 @@ void loop()
   lastFlame = flame;
 
   // Enregistrement nouvelle alerte (uniquement au déclenchement)
-  if (alerte && !prevAlert)
-  {
-    if (history.size() >= 50)
-    {
+  if (alerte && !prevAlert) {
+    if (history.size() >= 50) {
       history.remove(0);
     }
 
@@ -693,37 +645,31 @@ void loop()
 
     hasNewAlerte = false;
 
-    if (tempAlert)
-    {
+    if (tempAlert) {
       obj["var"] = "T";
       obj["val"] = temp_moy;
       hasNewAlerte = true;
     }
-    if (humAlert)
-    {
+    if (humAlert) {
       obj["var"] = "H";
       obj["val"] = hum_moy;
       hasNewAlerte = true;
     }
-    if (smokeAlert)
-    {
+    if (smokeAlert) {
       obj["var"] = "S";
       obj["val"] = smoke;
       hasNewAlerte = true;
     }
-    if (flameAlert)
-    {
+    if (flameAlert) {
       obj["var"] = "F";
       obj["val"] = flame;
       hasNewAlerte = true;
     }
 
     // Sauvegarde sur disque seulement si une alerte a été ajoutée
-    if (hasNewAlerte)
-    {
+    if (hasNewAlerte) {
       File file = LittleFS.open("/db/history.json", "w");
-      if (file)
-      {
+      if (file) {
         serializeJson(historyDoc, file);
         file.close();
         Serial.println("Nouvelle alerte ajoutée et historique sauvegardé");
@@ -742,57 +688,50 @@ void loop()
     if (flameAlert)
       alertMsg += "Détection flamme !\n";
 
-    sendAlertGSM(alertMsg);
-  }
-  else if (!alerte && prevAlert)
-  {
+    pendingAlertMessage = alertMsg;  // on stocke le message
+    gsmState = SENDING_SMS;
+  } else if (!alerte && prevAlert) {
     // Plus d'alerte → on réinitialise newAlerte
     hasNewAlerte = false;
     // newAlerte reste valide mais on sait qu'il n'y en a plus de nouvelle
   }
   prevAlert = alerte;
 
-  String jsonStr = buildStatusJson(
-      false,
-      temp_moy, hum_moy, smoke, flame, alerte,
-      tempAlert, humAlert, smokeAlert, flameAlert);
-  ws.textAll(jsonStr);
+  // String jsonStr = buildStatusJson(
+  //   false,
+  //   temp_moy, hum_moy, smoke, flame, alerte,
+  //   tempAlert, humAlert, smokeAlert, flameAlert);
+  // ws.textAll(jsonStr);
 
-  LoRa.beginPacket();
-  LoRa.print(jsonStr);
-  LoRa.endPacket();
+  // LoRa.beginPacket();
+  // LoRa.print(jsonStr);
+  // LoRa.endPacket();
 
-  receiveCommand = false;
-  LoRa.receive();
+  // receiveCommand = false;
+  // LoRa.receive();
 
-  Serial.printf("Envoi LoRa → T=%.1f°C  H=%.1f%%  S=%d Alert=%d\n",
-                temp_moy, hum_moy, smoke, alerte);
+  // Serial.printf("Envoi LoRa → T=%.1f°C  H=%.1f%%  S=%d Alert=%d\n",
+  //               temp_moy, hum_moy, smoke, alerte);
 
   // Boucle d'attente active : on vérifie régulièrement les paquets entrants pendant 1s
   unsigned long startWait = millis();
-  while (millis() - startWait < 1000)
-  {
-    int packetSize = LoRa.parsePacket();
-    if (packetSize)
-    {
-      String received = "";
-      while (LoRa.available())
-      {
-        received += (char)LoRa.read();
-      }
-      Serial.printf("Reçu LoRa : %s\n", received.c_str());
+  // while (millis() - startWait < 1000) {
+  //   int packetSize = LoRa.parsePacket();
+  //   if (packetSize) {
+  //     String received = "";
+  //     while (LoRa.available()) {
+  //       received += (char)LoRa.read();
+  //     }
+  //     Serial.printf("Reçu LoRa : %s\n", received.c_str());
 
-      StaticJsonDocument<256> doc;
-      DeserializationError error = deserializeJson(doc, received);
-      if (!error)
-      {
-        handleCommand(doc);
-      }
-      else
-      {
-        Serial.println("Erreur JSON LoRa : " + String(error.c_str()));
-      }
-    }
-    delay(1); // Très petit delay pour ne pas bouffer 100% CPU
-  }
+  //     StaticJsonDocument<256> doc;
+  //     DeserializationError error = deserializeJson(doc, received);
+  //     if (!error) {
+  //       handleCommand(doc);
+  //     } else {
+  //       Serial.println("Erreur JSON LoRa : " + String(error.c_str()));
+  //     }
+  //   }
+  //   delay(1);  // Très petit delay pour ne pas bouffer 100% CPU
+  // }
 }
