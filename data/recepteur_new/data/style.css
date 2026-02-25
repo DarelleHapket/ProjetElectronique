@@ -368,6 +368,66 @@ body {
     color: #666;
 }
 
+/* Variante critique */
+.history-item.critical {
+    border-left: 4px solid #dc3545;
+    /* rouge danger */
+    background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%);
+}
+
+.history-item.critical:hover {
+    background: linear-gradient(135deg, #ffe0e0 0%, #ffd0d0 100%);
+    transform: translateX(5px);
+}
+
+.critical-label {
+    color: #dc3545;
+    font-weight: 700;
+}
+
+.critical-badge {
+    background: #dc3545;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.history-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-time {
+    color: #666;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.history-type {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+}
+
+.history-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.history-value {
+    font-size: 16px;
+    font-weight: 700;
+    min-width: 70px;
+    text-align: right;
+    color: #FF8C00;
+}
+
 /* Sensor Grid */
 .sensor-grid {
     display: grid;
@@ -754,7 +814,7 @@ body {
 }
 
 .popup-header {
-    padding: 16px 20px;
+    padding: 10px 15px;
     background: #f8f9fa;
     border-bottom: 1px solid #eee;
     display: flex;
@@ -771,11 +831,11 @@ body {
 }
 
 .popup-body {
-    padding: 24px;
+    padding: 15px;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
 }
 
 .form-group label {
@@ -879,6 +939,35 @@ body {
 
 .error-messages div {
     margin: 4px 0;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    transform: scale(1.03);
+}
+
+.btn-danger:active {
+    transform: scale(0.97);
+}
+
+.alert-card {
+    background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%);
+    border: 2px solid #dc3545;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.15);
 }
 
 @keyframes spin {

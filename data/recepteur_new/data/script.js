@@ -165,11 +165,21 @@ function displayAlerts() {
         </div>
     `).join('');
 
+    // Ajout du bouton STOP BUZZER uniquement en cas d'alerte
+    const buzzerButton = `
+        <div style="margin-top: 16px; text-align: center;">
+            <button class="btn btn-danger" onclick="stopBuzzer()">
+                🔇 Arrêter le Buzzer
+            </button>
+        </div>
+    `;
+
     container.innerHTML = `
         <div class="alert-card">
             <h3>🚨 ALERTES ACTIVES (${alerts.length})</h3>
             ${alertsHTML}
             <div class="urgent-message">⚠️ INTERVENTION REQUISE ⚠️</div>
+            ${buzzerButton}
         </div>`;
 }
 
@@ -227,33 +237,84 @@ function refreshView() {
 // ==========================================
 function updateHistory() {
     const list = document.getElementById('history-list');
+    if (!list) return;
+
     list.innerHTML = '';
 
-    if (datas.his.length === 0) {
-        list.innerHTML = '<li style="color:#888; font-style:italic;">Aucune alerte enregistrée</li>';
+    if (!datas.his || datas.his.length === 0) {
+        list.innerHTML = '<li style="color:#888; font-style:italic; text-align:center; padding:20px;">Aucune alerte enregistrée</li>';
         return;
     }
 
-    datas.his.forEach(entry => {
-        const typeLabel = {
-            T: 'Température',
-            H: 'Humidité',
-            S: 'Fumée/Gaz',
-            F: 'Flamme'
-        }[entry.var] || entry.var;
+    // On trie du plus récent au plus ancien (si le serveur n'envoie pas déjà trié)
+    const sortedHistory = [...datas.his].sort((a, b) => {
+        // Comparaison simple sur la chaîne "MM/YY HH:MM" → fonctionne car format fixe
+        return b.t.localeCompare(a.t);
+    });
 
+    sortedHistory.forEach(entry => {
+        // Détection si c'est une alerte critique
+        const isCritical = entry.crit === true;
+
+        // Traduction du type d'alerte
+        let typeLabel = '';
+        let unit = '';
+        let valueDisplay = entry.val != null ? Number(entry.val).toFixed(1) : '—';
+
+        switch (entry.var) {
+            case 'T':
+                typeLabel = 'Température élevée';
+                unit = '°C';
+                break;
+            case 'T+':
+                typeLabel = 'Température CRITIQUE';
+                unit = '°C';
+                break;
+            case 'H':
+                typeLabel = 'Humidité élevée';
+                unit = '%';
+                break;
+            case 'S':
+                typeLabel = 'Fumée / Gaz';
+                unit = '';
+                break;
+            case 'S++':
+                typeLabel = 'Fumée TRÈS ÉLEVÉE';
+                unit = '';
+                break;
+            case 'F':
+                typeLabel = 'Détection flamme';
+                unit = '';
+                break;
+            case 'F!':
+                typeLabel = 'FLAMME CONFIRMÉE';
+                unit = '';
+                break;
+            default:
+                typeLabel = entry.var || 'Inconnu';
+                unit = '';
+        }
+
+        // Création de l'élément
         const li = document.createElement('li');
         li.className = 'history-item';
+        if (isCritical) {
+            li.classList.add('critical');
+        }
+
         li.innerHTML = `
-            <span class="history-time">${entry.t || '??'}</span>
-            <div class="history-event">
-                <strong>${typeLabel}</strong>  
+            <div class="history-left">
+                <span class="history-time">${entry.t || '??/?? ??:??'}</span>
+                <span class="history-type ${isCritical ? 'critical-label' : ''}">
+                    ${typeLabel}
+                </span>
             </div>
-            <div>
-                ${entry.val?.toFixed(1) ?? '-'}
-                ${entry.var === 'T' ? '°C' : entry.var === 'H' ? '%' : entry.var === 'S' ? 'ppm' : ''}
+            <div class="history-right">
+                <span class="history-value">${valueDisplay}${unit}</span>
+                ${isCritical ? '<span class="critical-badge">CRITIQUE</span>' : ''}
             </div>
         `;
+
         list.appendChild(li);
     });
 }
@@ -409,6 +470,45 @@ function sendManualCommand(override, state) {
         isSendingCommand = true;
     }
 
+}
+
+function stopBuzzer() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("Connexion au module perdue. Impossible d'arrêter le buzzer.");
+        return;
+    }
+
+    showLoader("Arrêt du buzzer en cours...");
+
+    ws.send(JSON.stringify({
+        com: "off_buzzer"
+    }));
+
+    // Feedback visuel immédiat (optionnel)
+    setTimeout(() => {
+        hideLoader();
+        // On peut aussi mettre à jour un état local temporaire si besoin
+    }, 800);
+}
+
+function forceCutPower() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("Connexion au module perdue.");
+        return;
+    }
+    showLoader("Coupure du courant en cours...");
+    ws.send(JSON.stringify({ com: "force_cut" }));
+    isSendingCommand = true;
+}
+
+function restorePower() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("Connexion au module perdue.");
+        return;
+    }
+    showLoader("Rétablissement du courant en cours...");
+    ws.send(JSON.stringify({ com: "restore_pwr" }));
+    isSendingCommand = true;
 }
 
 // ==========================================
