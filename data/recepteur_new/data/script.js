@@ -220,6 +220,7 @@ function refreshView() {
     document.getElementById('display-humidity').innerText = datas.seuils?.sH + ' %';
     document.getElementById('display-smoke').innerText = datas.seuils?.sSm + ' ppm';
     document.getElementById('display-flame').innerText = '≤ ' + datas.seuils?.sF;
+    document.getElementById('display-tel').innerText = ' ' + datas?.seuils?.tel;
 
     // const statusText = datas.mnlOvrr
     //     ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
