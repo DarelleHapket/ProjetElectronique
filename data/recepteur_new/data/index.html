@@ -119,27 +119,26 @@
                 </div>
                 <div class="grid-320">
                     <div class="card">
-                        <h3>🎛️ Commande Manuelle Ventilation</h3>
+                        <h3>⚡ Alimentation Salle Technique</h3>
                         <div style="margin: 20px 0; text-align: center;">
                             <p><strong>État actuel :</strong>
-                                <span id="relay-status" style="font-weight: bold; color: #333;">Automatique</span>
+                                <span id="power-status" style="font-weight: bold; font-size: 1.1em;">EN SERVICE</span>
                             </p>
 
-                            <div style="margin: 15px 0;">
-                                <button id="ventil-on" class="btn btn-success" onclick="sendManualCommand(true, true)">
-                                    🔵 Ventilation FORCÉE ON
+                            <div
+                                style="margin: 20px 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                                <button class="btn btn-danger" onclick="forceCutPower()">
+                                    ⛔ COUPER LE COURANT (FORCE)
                                 </button>
-                                <button id="ventil-off" class="btn btn-danger" onclick="sendManualCommand(true, false)">
-                                    🔴 Ventilation FORCÉE OFF
+                                <button class="btn btn-success" onclick="restorePower()">
+                                    ✅ RÉTABLIR LE COURANT
                                 </button>
                             </div>
-
-                            <button class="btn btn-secondary" onclick="sendManualCommand(false, false)">
-                                ↩️ Retour mode automatique
-                            </button>
                         </div>
-                        <small style="color: #666; display: block; margin-top: 10px;">
-                            Le mode manuel prend priorité sur la logique automatique.
+                        <small style="color: #666; display: block; margin-top: 10px; line-height: 1.4;">
+                            • Coupure automatique sur alerte critique<br>
+                            • La coupure reste active même si l’alerte disparaît<br>
+                            • Seul un rétablissement manuel est possible
                         </small>
                     </div>
                     <div class="history-card">
@@ -296,8 +295,8 @@
                     <label>📞 Numéro d'urgence</label>
                     <div class="input-group">
                         <span class="unit fixed">
-                            <img src="images/flag/cm.png" alt="Drapeau Cameroun" width="24"
-                                height="16" style="vertical-align: middle; margin-right: 4px;">
+                            <img src="images/flag/cm.png" alt="Drapeau Cameroun" width="24" height="16"
+                                style="vertical-align: middle; margin-right: 4px;">
                             +237
                         </span>
                         <input type="tel" id="popupTel" placeholder="695 680 531" pattern="[0-9]{9}" minlength="9"
