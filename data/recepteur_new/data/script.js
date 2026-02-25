@@ -86,6 +86,13 @@ function connectWebSocket() {
                 }
                 hideLoader()
             }
+            if (received?.event && received?.success) {
+                if (isSendingCommand) {
+                    closeThresholdPopup()
+                    isSendingCommand = false
+                }
+                hideLoader()
+            }
             refreshView();
         } catch (e) {
             console.error("Erreur lors du parsing du message WebSocket :", e);
@@ -214,19 +221,26 @@ function refreshView() {
     document.getElementById('display-smoke').innerText = datas.seuils?.sSm + ' ppm';
     document.getElementById('display-flame').innerText = '≤ ' + datas.seuils?.sF;
 
-    const statusText = datas.mnlOvrr
-        ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
-        : "Automatique";
-    const statusColor = datas.mnlOvrr
-        ? (datas.mnlVent ? "#28a745" : "#dc3545")
-        : "#666";
+    // const statusText = datas.mnlOvrr
+    //     ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
+    //     : "Automatique";
+    // const statusColor = datas.mnlOvrr
+    //     ? (datas.mnlVent ? "#28a745" : "#dc3545")
+    //     : "#666";
 
-    const statusEl = document.getElementById('relay-status');
-    statusEl.innerText = statusText;
-    statusEl.style.color = statusColor;
+    // const statusEl = document.getElementById('relay-status');
+    // statusEl.innerText = statusText;
+    // statusEl.style.color = statusColor;
 
-    document.getElementById('ventil-on').style.opacity = datas.mnlOvrr && datas.mnlVent ? "1" : "0.6";
-    document.getElementById('ventil-off').style.opacity = datas.mnlOvrr && !datas.mnlVent ? "1" : "0.6";
+    // document.getElementById('ventil-on').style.opacity = datas.mnlOvrr && datas.mnlVent ? "1" : "0.6";
+    // document.getElementById('ventil-off').style.opacity = datas.mnlOvrr && !datas.mnlVent ? "1" : "0.6";
+
+    const powerEl = document.getElementById('power-status');
+    if (powerEl) {
+        const isOn = !!datas.pwrOn;
+        powerEl.textContent = isOn ? 'EN SERVICE' : 'COUPÉE';
+        powerEl.style.color = isOn ? '#28a745' : '#dc3545';
+    }
 
     displayAlerts();
     updateHistory();

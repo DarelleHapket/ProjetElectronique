@@ -220,16 +220,16 @@ function refreshView() {
     document.getElementById('display-flame').innerText = '≤ ' + datas?.seuils?.sF;
     document.getElementById('display-tel').innerText = ' ' + datas?.seuils?.tel;
 
-    const statusText = datas.mnlOvrr
-        ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
-        : "Automatique";
-    const statusColor = datas.mnlOvrr
-        ? (datas.mnlVent ? "#28a745" : "#dc3545")
-        : "#666";
+    // const statusText = datas.mnlOvrr
+    //     ? (datas.mnlVent ? "FORCÉE ON" : "FORCÉE OFF")
+    //     : "Automatique";
+    // const statusColor = datas.mnlOvrr
+    //     ? (datas.mnlVent ? "#28a745" : "#dc3545")
+    //     : "#666";
 
-    const statusEl = document.getElementById('relay-status');
-    statusEl.innerText = statusText;
-    statusEl.style.color = statusColor;
+    // const statusEl = document.getElementById('relay-status');
+    // statusEl.innerText = statusText;
+    // statusEl.style.color = statusColor;
 
     const powerEl = document.getElementById('power-status');
     if (powerEl) {
