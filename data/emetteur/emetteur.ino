@@ -43,8 +43,7 @@
 #define MODEM_TX 15
 // Configuration – À CHANGER
 #define APN ""
-const char *SMS_TARGET = "+237699974400";
-const char *CALL_TARGET = "+237699974400";
+String tel = "+237699974400";
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 
@@ -80,7 +79,7 @@ int FLAME_SEUIL_DEFAULT = 2000;
 float tempSeuil = TEMP_SEUIL_DEFAULT;
 float humSeuil = HUM_SEUIL_DEFAULT;
 int smokeSeuil = SMOKE_SEUIL_DEFAULT;
-int seuilFlame = FLAME_SEUIL_DEFAULT;
+int seuilFlame = FLAME_SEUIL_DEFAULT; 
 
 // controlle automatique de la ventillation
 bool manualVentil = false;
@@ -144,7 +143,7 @@ void handleGSMNonBlocking() {
           break;
         }
         Serial.println("[GSM] Envoi SMS...");
-        if (modem.sendSMS(SMS_TARGET, pendingAlertMessage)) {
+        if (modem.sendSMS(tel, pendingAlertMessage)) {
           Serial.println("→ SMS OK");
         } else {
           Serial.println("→ Échec SMS");
@@ -156,9 +155,9 @@ void handleGSMNonBlocking() {
 
     case MAKING_CALL:
       Serial.print("[GSM] Appel vers ");
-      Serial.println(CALL_TARGET);
+      Serial.println(tel);
       SerialAT.print("ATD");
-      SerialAT.print(CALL_TARGET);
+      SerialAT.print(tel);
       SerialAT.println(";");
       gsmState = CALL_ACTIVE;
       gsmTimer = millis();
@@ -199,7 +198,7 @@ void loadSettings() {
   File file = LittleFS.open("/db/settings.json", "r");
   if (!file) return;
 
-  StaticJsonDocument<512> doc;  // un peu plus grand pour être tranquille
+  StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, file);
   file.close();
 
@@ -208,14 +207,13 @@ void loadSettings() {
     return;
   }
 
-  tempSeuil = doc["sT"] | TEMP_SEUIL_DEFAULT;
-  humSeuil = doc["sH"] | HUM_SEUIL_DEFAULT;
-  smokeSeuil = doc["sSm"] | SMOKE_SEUIL_DEFAULT;
-  seuilFlame = doc["sF"] | FLAME_SEUIL_DEFAULT;
+  tempSeuil   = doc["sT"]  | TEMP_SEUIL_DEFAULT;
+  humSeuil    = doc["sH"]  | HUM_SEUIL_DEFAULT;
+  smokeSeuil  = doc["sSm"] | SMOKE_SEUIL_DEFAULT;
+  seuilFlame  = doc["sF"]  | FLAME_SEUIL_DEFAULT;
 
-  // Clés différentes pour SMS et appel
-  SMS_TARGET = doc["tel"] | SMS_TARGET;
-  CALL_TARGET = doc["tel"] | CALL_TARGET;
+  // ← ICI : conversion correcte pour String
+  tel = doc["tel"] | String("+237699974400");   // ou String(TEL_DEFAULT) si tu remets la constante
 }
 
 void saveSettings() {
@@ -224,8 +222,7 @@ void saveSettings() {
   doc["sH"] = humSeuil;
   doc["sSm"] = smokeSeuil;
   doc["sF"] = seuilFlame;
-  doc["tel"] = SMS_TARGET;
-  // doc["tel"] = CALL_TARGET;
+  doc["tel"] = tel;
 
   File file = LittleFS.open("/db/settings.json", "w");
   if (!file) {
@@ -251,9 +248,16 @@ void handleCommand(const JsonDocument &doc) {
       humSeuil = seuils["sH"] | humSeuil;
       smokeSeuil = seuils["sSm"] | smokeSeuil;
       seuilFlame = seuils["sF"] | seuilFlame;
+      seuilFlame = seuils["sF"] | seuilFlame;
+      tel = seuils["tel"] | tel;
+
+      Serial.print("Valeur : '");
+      Serial.print(tel);
+      Serial.println("'");
 
       saveSettings();
       Serial.println("Nouveaux seuils reçus et enregistrés");
+      Serial.println(tel);
     }
   }
 
@@ -343,7 +347,7 @@ String buildStatusJson(bool withAllHistory, float temp, float hum, int smoke, in
   seuils["sH"] = humSeuil;
   seuils["sSm"] = smokeSeuil;
   seuils["sF"] = seuilFlame;
-  seuils["tel"] = SMS_TARGET ? SMS_TARGET : "";
+  seuils["tel"] = tel;
 
   if (withAllHistory) {
     doc["his"] = history;
@@ -573,13 +577,17 @@ void setup() {
   digitalWrite(BUZZER_PIN, HIGH);
   delay(200);
   digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.print("Tel chargé au démarrage : '");
+Serial.print(tel);
+Serial.println("'");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  LOOP
 // ─────────────────────────────────────────────────────────────────────────────
 
-void loop() {
+void loop() { 
   // Lecture capteurs
   float t1 = dht1.readTemperature();
   float h1 = dht1.readHumidity();
@@ -697,41 +705,41 @@ void loop() {
   }
   prevAlert = alerte;
 
-  // String jsonStr = buildStatusJson(
-  //   false,
-  //   temp_moy, hum_moy, smoke, flame, alerte,
-  //   tempAlert, humAlert, smokeAlert, flameAlert);
-  // ws.textAll(jsonStr);
+  String jsonStr = buildStatusJson(
+    false,
+    temp_moy, hum_moy, smoke, flame, alerte,
+    tempAlert, humAlert, smokeAlert, flameAlert);
+  ws.textAll(jsonStr);
 
-  // LoRa.beginPacket();
-  // LoRa.print(jsonStr);
-  // LoRa.endPacket();
+  LoRa.beginPacket();
+  LoRa.print(jsonStr);
+  LoRa.endPacket();
 
-  // receiveCommand = false;
-  // LoRa.receive();
+  receiveCommand = false;
+  LoRa.receive();
 
-  // Serial.printf("Envoi LoRa → T=%.1f°C  H=%.1f%%  S=%d Alert=%d\n",
-  //               temp_moy, hum_moy, smoke, alerte);
+  Serial.printf("Envoi LoRa → T=%.1f°C  H=%.1f%%  S=%d Alert=%d\n",
+                temp_moy, hum_moy, smoke, alerte);
 
   // Boucle d'attente active : on vérifie régulièrement les paquets entrants pendant 1s
   unsigned long startWait = millis();
-  // while (millis() - startWait < 1000) {
-  //   int packetSize = LoRa.parsePacket();
-  //   if (packetSize) {
-  //     String received = "";
-  //     while (LoRa.available()) {
-  //       received += (char)LoRa.read();
-  //     }
-  //     Serial.printf("Reçu LoRa : %s\n", received.c_str());
+  while (millis() - startWait < 1000) {
+    int packetSize = LoRa.parsePacket();
+    if (packetSize) {
+      String received = "";
+      while (LoRa.available()) {
+        received += (char)LoRa.read();
+      }
+      Serial.printf("Reçu LoRa : %s\n", received.c_str());
 
-  //     StaticJsonDocument<256> doc;
-  //     DeserializationError error = deserializeJson(doc, received);
-  //     if (!error) {
-  //       handleCommand(doc);
-  //     } else {
-  //       Serial.println("Erreur JSON LoRa : " + String(error.c_str()));
-  //     }
-  //   }
-  //   delay(1);  // Très petit delay pour ne pas bouffer 100% CPU
-  // }
+      StaticJsonDocument<256> doc;
+      DeserializationError error = deserializeJson(doc, received);
+      if (!error) {
+        handleCommand(doc);
+      } else {
+        Serial.println("Erreur JSON LoRa : " + String(error.c_str()));
+      }
+    }
+    delay(1); 
+  }
 }

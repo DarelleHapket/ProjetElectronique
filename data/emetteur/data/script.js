@@ -265,6 +265,7 @@ function openThresholdPopup() {
     document.getElementById('popupSeuilHumidity').value = datas?.seuils?.sH ?? '';
     document.getElementById('popupSeuilSmoke').value = datas?.seuils?.sSm ?? '';
     document.getElementById('popupSeuilFlame').value = datas?.seuils?.sF ?? '';
+    document.getElementById('popupTel').value = datas?.seuils?.tel ?? '';
     document.getElementById('thresholdPopup').style.display = 'flex';
 }
 
